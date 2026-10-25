@@ -16,12 +16,13 @@ Feature: Firmware fetched from a URL comes only from GitHub
       | https://github.com:x@evil.example/openevse_wifi_v1.bin                                |
       | ftp://github.com/openevse_wifi_v1.bin                                                 |
 
+  @network
   Scenario: A GitHub release URL starts a download, not an upload
     When I ask the device to update from "https://github.com/OpenEVSE/openevse_esp32_firmware/releases/download/v5.1.5/openevse_wifi_v1.bin"
     Then the device starts the update
     And the updater was started from GitHub
 
-  @live
+  @live @network
   Scenario: The published release downloads intact from GitHub
     Given the latest published firmware "openevse_wifi_v1.bin" from GitHub
     When I ask the device to update from that release asset

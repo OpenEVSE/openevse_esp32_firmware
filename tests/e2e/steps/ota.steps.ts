@@ -102,6 +102,9 @@ Then('the updater was started from GitHub', async ({ stack }) => {
 });
 
 Then('the device did not start writing an image', async ({ stack }) => {
+  // A refused request never reaches the updater, so there is no event to wait for.
+  // Give an accepted one a moment to show up before asserting it did not.
+  await new Promise((resolve) => setTimeout(resolve, 3_000));
   expect(existsSync(sinkFile(stack.otaSinkDir, 'ota_begin.json'))).toBe(false);
 });
 

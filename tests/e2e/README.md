@@ -27,6 +27,7 @@ cd tests/e2e
 npm install && npx playwright install chromium  # once
 npm test                                        # everything
 npm run test:smoke                              # just the @smoke scenarios
+npm run test:offline                            # everything except @network (no GitHub access needed)
 E2E_VERBOSE=1 npx playwright test -g "GFCI"     # one scenario, mirror device logs
 npm run report                                  # open the HTML report
 ```
@@ -52,6 +53,8 @@ each path a device can be upgraded by:
   `https://github.com` (and `*.githubusercontent.com`) may be fetched from.
 - **Live release** (`@live`): the release asset GitHub publishes right now, which
   is compared with the size and SHA-256 GitHub reports for it.
+- **Network** (`@network`): any scenario that fetches from github.com. Run
+  `npm run test:offline` to skip them in a sandbox or on an offline machine.
 
 The native build's flash library is a stub, so the suite cannot see what real
 flash would hold. Instead, the native build's `Update` class (`EpoxyUpdate` in

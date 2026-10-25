@@ -1,4 +1,5 @@
 import { ChildProcess, execFile, spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, createWriteStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -45,6 +46,17 @@ function resolveBinary(): string {
   return found;
 }
 
+/** Fails before anything starts when another process already holds the port. */
+function assertPortFree(port: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once('error', () =>
+      reject(new Error(`port ${port} is already in use; set E2E_PORT_BASE to a free block`)),
+    );
+    server.listen(port, () => server.close(() => resolve()));
+  });
+}
+
 async function stop(proc: ChildProcess | undefined) {
   if (!proc || proc.exitCode !== null) return;
   const exited = new Promise<void>((resolve) => proc.once('exit', () => resolve()));
@@ -88,6 +100,7 @@ export class Stack {
 
   static async start(workerIndex: number): Promise<Stack> {
     const base = Number(process.env.E2E_PORT_BASE ?? 18000) + workerIndex * 10;
+    await Promise.all([base, base + 1, base + 2].map(assertPortFree));
     const stack = new Stack(workerIndex, base, base + 1, base + 2);
     try {
       await stack.startEmulator();

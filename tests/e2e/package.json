@@ -5,6 +5,7 @@
   "scripts": {
     "test": "bddgen && playwright test",
     "test:smoke": "bddgen && playwright test --grep @smoke",
+    "test:offline": "bddgen && playwright test --grep-invert @network",
     "bddgen": "bddgen",
     "report": "playwright show-report",
     "typecheck": "tsc --noEmit"
