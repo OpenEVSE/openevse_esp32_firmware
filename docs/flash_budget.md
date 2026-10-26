@@ -123,9 +123,9 @@ keeps it automatically — there is nothing to remember.
 In rough order of value per unit of pain:
 
 1. **Split `ENABLE_DEBUG` out of `openevse_wifi_v1`** (~10.8KB) — the biggest
-   single lever, at the cost of field diagnostics on `Serial1`. An
-   `openevse_wifi_v1_dev` env could keep debug for developers, as other boards
-   already do.
+   single lever, at the cost of field diagnostics on `Serial1`. A new
+   `openevse_wifi_v1_dev` env (none exists today) could keep debug for
+   developers, as other boards already do.
 2. **Brotli instead of gzip** for the JS/CSS assets (~245KB of the image).
    Typically 15–20% better than gzip, so plausibly 30KB+ — but it needs a
    `Content-Encoding: br` path in the web server and a build-pipeline change.

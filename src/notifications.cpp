@@ -141,14 +141,11 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
   uint32_t now = notification_epoch_now();
   bool changed = (_count != previous_count);
 
-  // At most one event-log row per pass. EventLog::log() costs two full
-  // LittleFS traversals (totalBytes() + usedBytes(), 30-140 ms each) for its
-  // free-space guard, and six to nine advisories can become knowable on the
-  // same pass -- the boot pass, typically -- which would be seconds of
-  // blocking work in one MicroTask iteration. The rest are still deduped by
-  // id and take their row on a later 5 s tick, because eligibility below is
-  // "this id has no row yet", not "this is the raise edge".
-  bool logged_this_pass = false;
+  // Every advisory without a row takes one on this pass. EventLog::log()'s
+  // free-space guard measures LittleFS on a timer (see event_log_space.h), not
+  // per call, so the six to nine advisories that can become knowable on the
+  // same pass -- the boot pass, typically -- cost one append each plus at most
+  // one measurement. No row waits behind another, so none is stamped late.
 
   // Don't attempt a row until the clock is trusted. Eligibility is now "not
   // yet logged" rather than "raise edge", so an advisory that log() refuses
@@ -159,7 +156,7 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
   // same test) keeps the retry loop from running against a clock that can
   // only ever say no, and keeps the invariant in this function instead of
   // depending on the order of the guards inside log(). Once the clock does
-  // sync, the advisories that are still live take their rows one per pass.
+  // sync, the advisories that are still live take their rows on the next pass.
   bool clock_trusted = (0 != now);
 
   for(size_t i = 0; i < _count; i++) {
@@ -199,8 +196,7 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
         break;
       }
     }
-    if(clock_trusted && !already_logged && !logged_this_pass &&
-       _logged_count < NOTIFICATION_MAX)
+    if(clock_trusted && !already_logged && _logged_count < NOTIFICATION_MAX)
     {
       // Argument list copied from EvseManager's own call site
       // (src/evse_man.cpp:386) so the row is shaped like every other row.
@@ -220,7 +216,6 @@ unsigned long Notifications::loop(MicroTasks::WakeReason reason)
       // unmarked means the next pass tries again.
       if(written) {
         _logged_ids[_logged_count++] = _live[i].id;
-        logged_this_pass = true;
       }
     }
   }
