@@ -38,6 +38,7 @@ pio run -e adafruit_huzzah32
 pio run -e nodemcu-32s
 pio run -e olimex_esp32-gateway-e      # wired Ethernet
 pio run -e openevse_wifi_tft_v1        # TFT touchscreen
+pio run -e openevse_wifi_v1_rc522      # MFRC522/RC522 on SPI (instead of PN532)
 pio run -e wt32-eth01                  # Ethernet (WT32)
 pio run -e olimex_esp32-poe-iso        # Ethernet + PoE
 ```
@@ -97,12 +98,17 @@ never re-downloading on a core switch.
 
 ## Debug builds
 
-The `_dev` env variants enable serial debug output on the ESP's second serial
-port (GPIO2 / `Serial1`):
+Serial debug output goes to the ESP's second serial port (GPIO2 / `Serial1`).
+The production `openevse_wifi_v1` env already enables it (`ENABLE_DEBUG` via
+`common.debug_flags`), so no special env is needed:
 
 ```bash
-pio run -e openevse_wifi_v1_dev -t upload
+pio run -e openevse_wifi_v1 -t upload
 ```
+
+Some boards also have separate `_dev` envs (`adafruit_huzzah32_dev`,
+`olimex_esp32-gateway-e_dev`, `olimex_esp32-gateway-f_dev`,
+`openevse_wifi_tft_v1_dev`); there is no `openevse_wifi_v1_dev`.
 
 To route debug output to the main serial port instead, change
 `-DDEBUG_PORT=Serial1` to `-DDEBUG_PORT=Serial` in `platformio.ini` — note this

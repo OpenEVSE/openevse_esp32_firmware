@@ -131,6 +131,7 @@ jobs:
           - adafruit_huzzah32
           - adafruit_featheresp32
           - openevse_wifi_v1
+          - openevse_wifi_v1_rc522
           - olimex_esp32-gateway-old
           - olimex_esp32-gateway-e
           - olimex_esp32-gateway-f
@@ -162,7 +163,9 @@ jobs:
     - name: Cache PlatformIO
       uses: actions/cache@v6
       with:
-        path: ~/.platformio
+        path: |
+          ~/.platformio
+          ~/.platformio-core3
         # Include the Python version: the ESP-IDF venv under here is built
         # for whichever interpreter created it, so a 3.15 cache must not be
         # restored into the 3.14 build.
@@ -210,7 +213,8 @@ jobs:
       # this step on pio's exit code, not tee's.
       run: |
         set -o pipefail
-        pio run -e ${{ matrix.env }} 2>&1 | tee pio-build-${{ matrix.env }}.log
+        export PLATFORMIO_BIN="$(command -v pio)"
+        scripts/pio run -e ${{ matrix.env }} 2>&1 | tee pio-build-${{ matrix.env }}.log
 
     - name: Check flash usage
       # Runs whether or not the build above succeeded: PlatformIO's own size

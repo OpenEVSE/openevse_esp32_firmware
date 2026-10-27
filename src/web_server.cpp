@@ -398,7 +398,11 @@ void handleLogin(MongooseHttpServerRequest *request, bool isHttps)
   response->addHeader(F("Cache-Control"), F("no-store"));
 
   if(HTTP_POST != request->method()) {
+    // Always write a body: an empty response stream never sets its content
+    // length, so ArduinoMongoose sends Content-Length: (size_t)-1 and a
+    // keep-alive client hangs waiting for it.
     response->setCode(405);
+    response->print(F("{\"msg\":\"method not allowed\"}"));
     request->send(response);
     return;
   }
@@ -492,7 +496,13 @@ void handleLogout(MongooseHttpServerRequest *request)
   MongooseHttpServerResponseStream *response = request->beginResponseStream();
   response->setContentType(CONTENT_TYPE_JSON);
   response->addHeader(F("Cache-Control"), F("no-store"));
-  if(HTTP_POST != request->method()) { response->setCode(405); request->send(response); return; }
+  if(HTTP_POST != request->method()) {
+    // Body required, see handleLogin().
+    response->setCode(405);
+    response->print(F("{\"msg\":\"method not allowed\"}"));
+    request->send(response);
+    return;
+  }
   response->addHeader(F("Set-Cookie"), F("oevse_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"));
   response->setCode(200);
   response->print(F("{\"msg\":\"ok\"}"));
@@ -690,7 +700,7 @@ void buildStatus(JsonDocument &doc) {
 
   doc["ocpp_connected"] = (int)OcppTask::isConnected();
 
-#if defined(ENABLE_PN532) || defined(ENABLE_RFID)
+#if defined(ENABLE_PN532) || defined(ENABLE_RC522) || defined(ENABLE_RFID)
   doc["rfid_failure"] = (int) rfid.communicationFails();
   doc["rfid_reader"] = (int) rfid.readerPresent();
 #endif
