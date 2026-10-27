@@ -66,11 +66,15 @@ bool TsdbEnergyLogger::init_db() {
 // write there would trip it just the same.
 #define TSDB_WRITER_STACK   6144
 #define TSDB_WRITER_QUEUE   4
+#define TSDB_USAGE_REFRESH_MS 30000   // same age limit as LFS_USAGE_MAX_AGE_MS
 
 bool TsdbEnergyLogger::start_writer() {
   _jobs = xQueueCreate(TSDB_WRITER_QUEUE, sizeof(TsdbWriteJob));
   if (_jobs == nullptr) return false;
   TaskHandle_t h = nullptr;
+  // First sample here, before the writer exists to hold the lock, so a request
+  // never finds the cache empty and reads LittleFS from loopTask itself.
+  littlefs_usage.refresh(millis());
   if (xTaskCreatePinnedToCore(writer_task, "tsdb_writer", TSDB_WRITER_STACK, this,
                               1, &h, APP_CPU_NUM) != pdPASS) {
     vQueueDelete(_jobs);
@@ -86,9 +90,13 @@ bool TsdbEnergyLogger::start_writer() {
 void TsdbEnergyLogger::writer_task(void *arg) {
   TsdbEnergyLogger *self = static_cast<TsdbEnergyLogger *>(arg);
   TsdbWriteJob job;
-  littlefs_usage.refresh(millis());
   for (;;) {
-    if (xQueueReceive(self->_jobs, &job, portMAX_DELAY) != pdTRUE) continue;
+    // Wake at least every TSDB_USAGE_REFRESH_MS even with no jobs: until the
+    // clock is set there are none, and other subsystems write LittleFS too.
+    if (xQueueReceive(self->_jobs, &job, pdMS_TO_TICKS(TSDB_USAGE_REFRESH_MS)) != pdTRUE) {
+      littlefs_usage.refresh(millis());
+      continue;
+    }
     if (job.rollup) self->rollup_yesterday();
     esp_err_t e = tsdb_write(job.ts, job.row);
     if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);

@@ -15,7 +15,9 @@
 //
 // So readers on loopTask only ever read the cached numbers. A task that writes
 // the filesystem in the background registers as the sampler and refreshes the
-// cache after each write, while it is the one paying for the lock anyway.
+// cache after each write, while it is the one paying for the lock anyway, and
+// on a timer so writes by other subsystems show up too. It takes the first
+// sample before registering, so get() never finds the cache empty.
 // Without a background sampler (builds whose writers all run on loopTask, so
 // there is no other task to wait for) get() refreshes when the sample is older
 // than max_age_ms, as /status did before.
