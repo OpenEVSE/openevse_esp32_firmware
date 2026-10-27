@@ -767,8 +767,7 @@ bool config_installer_password_set(const char *password)
 {
   // Same route as the ack blob: deserialize() raises the modified flag that
   // commit() requires, and only when the value really changed.
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 128;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   doc["installer_password"] = password;
   if(user_config.deserialize(doc)) {
     user_config.commit();
