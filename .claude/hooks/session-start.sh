@@ -29,8 +29,8 @@ $APT update -qq
 $APT install -y -qq libssl-dev
 
 # Pinned to match .github/workflows/build.yaml: PlatformIO Core 6.2.0 bumped
-# its bundled SCons to 4.11.1, which fails every core-3.x (pioarduino,
-# arduino+espidf hybrid) env at the final link step. 6.1.19 is the last
+# its bundled SCons to 4.11.1, which fails every core-3.x (arduino+espidf
+# hybrid) env at the final link step. 6.1.19 is the last
 # release on the working SCons 4.8.1.
 #
 # `python3 -m pip` (not bare `pip`, matching .github/workflows/build.yaml)

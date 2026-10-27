@@ -111,9 +111,9 @@ jobs:
       # release job that needs them. Same shape as SIGN_ENABLED below.
       CRASH_ARCHIVE_ENABLED: ${{ secrets.CRASH_ELF_ROLE_ARN != '' && secrets.CRASH_BUCKET != '' && (vars.CRASH_AWS_REGION != '' || secrets.CRASH_AWS_REGION != '') }}
 
-      # Environments whose Arduino core (core-3.x / pioarduino / IDF5) provides
-      # the signed-update verifier. Signed OTA is only enforced on these; add
-      # future core-3.x envs here. Older-core (4MB) envs cannot verify and are
+      # Environments whose Arduino core (core-3.x / espressif32 8.0.0 / IDF5)
+      # provides the signed-update verifier. Signed OTA is only enforced on these;
+      # add future core-3.x envs here. Older-core (4MB) envs cannot verify and are
       # left unsigned.
       SIGNED_OTA_ENVS: '["openevse_wifi_v1_16mb"]'
       # 'true' only when the image-signing key is configured. Keeps signed OTA
@@ -143,7 +143,7 @@ jobs:
           - esp32-c3-devkitc-02
           - openevse_wifi_tft_v1
           - openevse_wifi_tft_v1_dev
-          # core-3.x (pioarduino / IDF5) — 16MB+ boards
+          # core-3.x (espressif32 8.0.0 / IDF5) — 16MB+ boards
           - openevse_wifi_v1_16mb
           - native_openevse
 
@@ -184,7 +184,7 @@ jobs:
     - name: Install PlatformIO
       # Pinned: PlatformIO Core 6.2.0 bumped its bundled build engine to
       # SCons 4.11.1 (tool-scons@4.41101.0), which fails every core-3.x
-      # (pioarduino, arduino+espidf hybrid) env at the final link step with
+      # (arduino+espidf hybrid) env at the final link step with
       # `ModuleNotFoundError: No module named 'SCons.Tool.FortranCommon'`
       # (openevse_wifi_v1_16mb, openevse_wifi_tft_v1[_dev]). 6.1.19 is the
       # last release still on SCons 4.8.1 (tool-scons@4.40801.0), which

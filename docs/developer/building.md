@@ -53,12 +53,12 @@ reach its package registry (network restriction).
 
 ## Two-core tree
 
-The boards split across two PlatformIO platforms:
+The boards split across two Arduino cores, by flash size:
 
 | Boards | Platform | Arduino / IDF | Why |
 |---|---|---|---|
-| 4MB (`openevse_wifi_v1`, gateways, huzzah, …) — the default | `espressif32@7.1.3` | core **2.x** / IDF4 | Keeps the IDF4 image small enough for **dual-slot OTA** on 4MB flash. |
-| 16MB (`openevse_wifi_v1_16mb`) | `${common.platform_core3}` (pioarduino) | core **3.x** / IDF5 | Larger flash / newer silicon needs the core-3 toolchain; this env is `openevse_wifi_v1` rebuilt on core-3. |
+| 4MB (`openevse_wifi_v1`, gateways, huzzah, …) — the default | `espressif32@7.1.3` | core **2.x** / IDF4 | Keeps the IDF4 image small enough for **dual-slot OTA** on 4MB flash. The core-3 build of these images did not fit the app slot. |
+| 16MB+ (`openevse_wifi_v1_16mb`, `openevse_wifi_tft_v1[_dev]`) | `${common.platform_core3}` (`espressif32@8.0.0`) | core **3.x** / IDF5 | Larger flash / newer silicon needs the core-3 toolchain. These are hybrid `framework = arduino, espidf` builds. |
 
 Shared `src/` code that touches APIs which changed between cores (e.g. LEDC,
 mbedTLS cert parsing) is version-guarded on `ESP_ARDUINO_VERSION` /
