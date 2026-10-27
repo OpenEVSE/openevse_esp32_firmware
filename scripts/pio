@@ -3,8 +3,8 @@
 # PlatformIO wrapper for the two-core tree.
 #
 # This repo builds on two incompatible Arduino-ESP32 cores:
-#   * core-2.x  (platform espressif32@6.12.0)   -> the 4MB boards (default)
-#   * core-3.x  (platform ${common.platform_core3}, pioarduino) -> 16MB / P4
+#   * core-2.x  (platform espressif32@7.1.3)   -> the 4MB boards (default)
+#   * core-3.x  (platform ${common.platform_core3} = espressif32@8.0.0) -> 16MB+
 #
 # Both platforms declare ~13 package names in common (framework-arduinoespressif32,
 # framework-espidf, the toolchains, several tool-*) but pin different versions, so
@@ -24,7 +24,7 @@
 # PLATFORMIO_BIN.
 set -euo pipefail
 
-# Envs that build on the core-3 (pioarduino) platform, derived from
+# Envs that build on the core-3 platform (${common.platform_core3}), derived from
 # platformio.ini rather than listed here.
 #
 # This used to be a hand-maintained list, and it silently went stale when

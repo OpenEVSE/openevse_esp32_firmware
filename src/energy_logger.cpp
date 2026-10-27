@@ -275,7 +275,7 @@ void EnergyLogger::cleanup_old_raw_files()
   mktime(&cutoff_tm);
 
   // File names are YYYY-MM-DD-HH.json — lexicographic order equals chronological order
-  char cutoff_name[24];
+  char cutoff_name[48];
   snprintf(cutoff_name, sizeof(cutoff_name), "%04d-%02d-%02d-%02d.json",
     cutoff_tm.tm_year + 1900,
     cutoff_tm.tm_mon + 1,
@@ -494,7 +494,7 @@ void EnergyLogger::aggregate_monthly_yearly()
 
     if (found && peak > -99.0) {
       MonthlyMetrics monthly;
-      snprintf(monthly.month, sizeof(monthly.month), "%04d-%02d", prev_year, prev_month);
+      snprintf(monthly.month, sizeof(monthly.month), "%04u-%02u", (unsigned)(prev_year % 10000), (unsigned)(prev_month % 100));
       monthly.peak_temp  = peak;
       monthly.min_temp   = (minT < 99.0) ? minT : 0;
       monthly.energy_kwh = energy_wh / 1000.0;

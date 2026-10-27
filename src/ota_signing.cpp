@@ -9,7 +9,7 @@
 #include <Arduino.h>
 #include <Update.h>
 
-// The signed-update verifier API ships only in the core-3.x (pioarduino / IDF5)
+// The signed-update verifier API ships only in the core-3.x (espressif32 8.0.0 / IDF5)
 // Arduino-ESP32 core used by the 16MB+ boards. Older-core (4MB) envs have no
 // Updater_Signing.h, so enforce signed OTA only on core-3.x environments.
 #if !defined(__has_include) || !__has_include("Updater_Signing.h")

@@ -70,7 +70,7 @@ the secret is added, builds are byte-for-byte unchanged.
 
 ### core-3.x limitation
 
-The verifier API exists only in the **core-3.x / pioarduino / IDF5** core (the
+The verifier API exists only in the **core-3.x / espressif32 8.0.0 / IDF5** core (the
 16MB+ boards, e.g. `openevse_wifi_v1_16mb`). Older-core 4MB envs have no
 `Updater_Signing.h`; `ota_signing.cpp` `#error`s if the flag is set there, and
 `SIGNED_OTA_ENVS` lists only signed-capable envs.

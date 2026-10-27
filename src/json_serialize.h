@@ -7,6 +7,8 @@
 class JsonSerialize
 {
   public:
+    virtual ~JsonSerialize() = default;
+
     virtual bool deserialize(const char *json)
     {
       JsonDocument doc;
