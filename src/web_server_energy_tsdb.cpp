@@ -320,9 +320,14 @@ static void emit_bucketed_daily(MongooseHttpServerResponseStream *response,
     uint32_t d1_end = d0 + (uint32_t)(bucket_days) * 86400 - 1;
 
     // --- check record count first to skip empty buckets cheaply ---
-    uint32_t cnt = 0;
-    if (!energy_query_count(d0, d1_end, cnt) || cnt == 0) {
-      continue;
+    // Only on flash, where tsdb answers a count without reading records. On
+    // the card a count is a full scan, the same reads the aggregate below makes,
+    // and its nscanned already says the bucket is empty.
+    if (!energy_on_card()) {
+      uint32_t cnt = 0;
+      if (!energy_query_count(d0, d1_end, cnt) || cnt == 0) {
+        continue;
+      }
     }
 
     // --- three aggregations in one pass ---

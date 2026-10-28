@@ -31,7 +31,8 @@ bool ds3231_time_plausible(time_t t);
 bool ds3231_decode(const uint8_t raw[DS3231_TIME_BYTES], time_t &out);
 
 // Encode a UTC time_t into 7 timekeeping registers.
-// Returns false if `t` is not representable (before 2000, or past 2099).
+// Returns false if `t` is not representable (before 2000 or after 2199);
+// 2100..2199 are encoded with the century bit set.
 bool ds3231_encode(time_t t, uint8_t raw[DS3231_TIME_BYTES]);
 
 #endif // __RTC_DS3231_REGS_H

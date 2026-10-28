@@ -43,12 +43,17 @@ bool config_restore_from_card();
 // makes it harmless on the boot mount.
 bool config_backup_ensure_on_card();
 
+// Factory reset: disarm, so nothing writes the mirror again before the
+// restart, and delete it, so the next boot cannot restore the old settings.
+void config_backup_clear();
+
 #else
 
 static inline void config_backup_arm() { }
 static inline bool config_backup_to_card() { return false; }
 static inline bool config_restore_from_card() { return false; }
 static inline bool config_backup_ensure_on_card() { return false; }
+static inline void config_backup_clear() { }
 
 #endif // ENABLE_SD_CARD
 

@@ -111,8 +111,11 @@ bool sdlog_store_preallocate()
         (unsigned long)SDLOG_CAPACITY,
         (unsigned long)((uint64_t)SDLOG_CAPACITY * SDLOG_RECORD_BYTES / (1024 * 1024)));
 
+  // Built under a temporary name and renamed into place only once complete, so
+  // a ring file at SDLOG_PATH is always a finished one. A power cut mid-way
+  // leaves only the .tmp, which the next attempt overwrites.
   unsigned long t0 = millis();
-  FILE *fp = fopen(SDLOG_PATH, "wb");
+  FILE *fp = fopen(SDLOG_TMP_PATH, "wb");
   if(fp == nullptr) {
     return false;
   }
@@ -140,11 +143,16 @@ bool sdlog_store_preallocate()
   }
 
   free(blank);
-  fclose(fp);
+  if(fclose(fp) != 0) {
+    ok = false;
+  }
 
+  if(ok) {
+    ok = rename(SDLOG_TMP_PATH, SDLOG_PATH) == 0;
+  }
   if(!ok) {
     DBUGLN("[sdlog] ring creation failed (card full?)");
-    remove(SDLOG_PATH);
+    remove(SDLOG_TMP_PATH);
   } else {
     // The one slow step in bring-up; SDLOG_CAPACITY is the knob if this is unreasonable.
     DBUGF("[sdlog] ring created in %lu ms", millis() - t0);
@@ -172,21 +180,20 @@ bool sdlog_store_begin()
   }
 
   // A file that is not the expected size cannot be used: the seq % capacity
-  // invariant that all the recovery logic rests on would break. This happens
-  // when SDLOG_CAPACITY changes between builds or a preallocation was cut
-  // short. Drop it so the next sd_card_loop() pass creates a fresh ring;
-  // the old records were written under a different capacity and are not
-  // recoverable in place.
+  // invariant that all the recovery logic rests on would break. Rings are
+  // only ever renamed into place complete, so this is a ring written under a
+  // different SDLOG_CAPACITY. Its history is not deleted without the user
+  // asking: the logger stays on internal flash (sd_card_loop() gives up on a
+  // ring that exists but will not open) until /sdcard/format.
   if(fseek(_fp, 0, SEEK_END) != 0) {
     fclose(_fp); _fp = nullptr;
     return false;
   }
   long size = ftell(_fp);
   if(size != (long)((uint64_t)SDLOG_CAPACITY * SDLOG_RECORD_BYTES)) {
-    DBUGF("[sdlog] ring is %ld bytes, expected %llu -- discarding it",
+    DBUGF("[sdlog] ring is %ld bytes, expected %llu -- leaving it; format the card to replace it",
           size, (unsigned long long)SDLOG_CAPACITY * SDLOG_RECORD_BYTES);
     fclose(_fp); _fp = nullptr;
-    remove(SDLOG_PATH);
     return false;
   }
 

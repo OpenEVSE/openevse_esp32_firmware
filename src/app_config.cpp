@@ -1348,5 +1348,7 @@ void config_reset()
   ResetEEPROM();
   LittleFS.format();
   config_load_settings();
+  // After the load, which can commit (and so mirror) the defaults.
+  config_backup_clear();
 }
 

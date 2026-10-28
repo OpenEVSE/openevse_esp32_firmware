@@ -20,6 +20,9 @@
 #ifndef SDLOG_PATH
 #define SDLOG_PATH "/sdcard/energy.log"
 #endif
+#ifndef SDLOG_TMP_PATH
+#define SDLOG_TMP_PATH SDLOG_PATH ".tmp"
+#endif
 
 // Ring capacity in records. 1 048 576 records x 32 B = 32 MB, which at one sample
 // a minute is ~2 years -- against the internal tsdb's ~100 days in 2.5 MB. The

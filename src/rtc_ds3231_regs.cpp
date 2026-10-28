@@ -119,6 +119,11 @@ bool ds3231_decode(const uint8_t raw[DS3231_TIME_BYTES], time_t &out)
 bool ds3231_encode(time_t t, uint8_t raw[DS3231_TIME_BYTES])
 {
   int64_t secs = (int64_t)t;
+  // The device holds 2000-01-01 .. 2199-12-31. Check while still 64-bit: a far
+  // future time would otherwise wrap the int32 day count back into that range.
+  if(secs < 946684800LL || secs >= 7258118400LL) {
+    return false;
+  }
   // Floor-divide: the device cannot hold pre-2000 times anyway, but a negative
   // time_t must not turn into a positive day number on the way to being rejected.
   int32_t days = (int32_t)((secs >= 0 ? secs : secs - 86399) / 86400);

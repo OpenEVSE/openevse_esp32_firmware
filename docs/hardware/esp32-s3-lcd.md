@@ -383,9 +383,11 @@ file is created at full size up front so every later write is an in-place overwr
 rather than a growth that disturbs FAT metadata. Creation is slow (79 s for 128 MB
 on a 32 GB card at 1-bit/20 MHz, 221 s on the same card straight after a format),
 so it runs in a background task while the logger keeps writing to flash; `/status`
-`sd_status` reads `creating log` for the duration. A ring of the wrong size (a
-capacity change between builds, or a creation cut short) is discarded and recreated;
-its records are not carried over.
+`sd_status` reads `creating log` for the duration. The ring is built as
+`energy.log.tmp` and renamed into place only when complete, so a creation cut short
+leaves no ring and the next mount starts again. A ring of the wrong size can then only
+come from a build with a different `SDLOG_CAPACITY`; it is left on the card, not
+deleted, and the logger stays on internal flash until the card is formatted.
 
 A `POST` to `/sdcard/format` wipes the card and re-provisions it (the energy-log ring and
 the config mirror). It answers at once; `sd_status` then reads `formatting`, then
@@ -594,7 +596,7 @@ is not visible on the board.
    case. A flat or missing cell logs the oscillator-stop flag instead and must present
    as *no* time, never as 1970.
 6. **SD.** `sd_status` in `/status` should read `mounted`. **First boot with a fresh
-   card creates a 32 MB file and that is the one slow step in this whole list** — time
+   card creates a 128 MB file and that is the one slow step in this whole list** — time
    it, and if it is unreasonable, `SDLOG_CAPACITY` is the knob. If the mount fails on a
    card that works elsewhere, check R33/DAT3 before suspecting anything else.
 

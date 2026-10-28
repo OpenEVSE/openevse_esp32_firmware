@@ -285,6 +285,10 @@ void sd_card_loop()
         return;
       }
       DBUGLN("[sd] card inserted, mounting");
+      // One attempt per insertion: a card that will not mount is not retried
+      // every poll (each failed attempt blocks this loop). sd_card_begin()
+      // sets the flag again if detect reads absent.
+      _seen_absent = false;
       if(!sd_card_begin()) {
         return;
       }

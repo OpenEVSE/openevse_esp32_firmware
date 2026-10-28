@@ -16,7 +16,14 @@ void *lvgl_mem_pool_alloc(size_t size)
   // this pool but it is a working display; returning NULL is a panic loop.
   ESP_LOGW("lvgl", "PSRAM pool alloc of %u B failed, falling back to internal DRAM",
            (unsigned)size);
-  return heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  p = heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  if(p == NULL) {
+    // LVGL hands this straight to lv_tlsf_create_with_pool() unchecked, so a
+    // NULL would fault somewhere less obvious. Stop here and say why.
+    ESP_LOGE("lvgl", "LVGL pool alloc of %u B failed in internal DRAM too", (unsigned)size);
+    abort();
+  }
+  return p;
 }
 
 #endif

@@ -181,6 +181,18 @@ TEST_CASE("refuses to encode a time the device cannot hold")
   CHECK_FALSE(ds3231_encode(0, raw));            // 1970
   CHECK_FALSE(ds3231_encode(946684799, raw));    // 1999-12-31 23:59:59
   CHECK(ds3231_encode(946684800, raw));          // 2000-01-01, first holdable
+  CHECK(ds3231_encode(7258118399, raw));         // 2199-12-31 23:59:59, last holdable
+  CHECK_FALSE(ds3231_encode(7258118400, raw));   // 2200-01-01
+}
+
+TEST_CASE("refuses a time whose day count would wrap 32 bits into range")
+{
+  // 2^32 days past a 2001 date: narrowed to int32 first, it would encode as 2001.
+  uint8_t raw[DS3231_TIME_BYTES];
+  if(sizeof(time_t) < 8) {
+    return;
+  }
+  CHECK_FALSE(ds3231_encode((time_t)((4294967296LL + 11323) * 86400), raw));
 }
 
 TEST_CASE("ignores the unused high bits the device sets")

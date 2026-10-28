@@ -2,6 +2,7 @@
 #include "crash_unwind.h"
 
 #include <Arduino.h>
+#include <new>
 #include <MongooseCore.h>
 #include <MongooseHttpServer.h>
 
@@ -626,7 +627,11 @@ static bool heapmap_walker(walker_heap_into_t heap, walker_block_info_t b, void 
 
 void diagnostics_heapmap(String &out)
 {
-  HeapMapState *st = new HeapMapState();   // ~500 B; keep it off the stack
+  HeapMapState *st = new (std::nothrow) HeapMapState();   // ~500 B; keep it off the stack
+  if(st == nullptr) {
+    out += "heap map: no memory for the walk state\n";
+    return;
+  }
   heap_caps_walk(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, heapmap_walker, st);
 
   char line[96];

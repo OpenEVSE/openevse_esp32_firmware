@@ -24,6 +24,15 @@ void config_backup_arm()
   config_backup_ensure_on_card();
 }
 
+void config_backup_clear()
+{
+  _armed = false;
+  if(sd_card_mounted()) {
+    remove(CONFIG_BACKUP_PATH);
+    remove(CONFIG_BACKUP_PATH ".tmp");
+  }
+}
+
 bool config_backup_ensure_on_card()
 {
   if(!_armed || !sd_card_mounted()) {
