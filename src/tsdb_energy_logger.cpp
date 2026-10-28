@@ -5,6 +5,7 @@
 #include "energy_logger.h"   // MonthlyMetrics, AnnualMetrics, serialize/deserialize
 #include "debug.h"
 #include "fs_usage.h"
+#include "psram.h"
 #include <LittleFS.h>
 #include <time.h>
 
@@ -32,23 +33,26 @@ bool TsdbEnergyLogger::init_db() {
     cfg.max_records = TSDB_CALC_MAX_RECORDS(budget, TSDB_NUM_COLS);
   }
   cfg.index_stride = 380;
-#if defined(CONFIG_IDF_TARGET_ESP32P4)        // P4 has PSRAM
-  cfg.alloc_strategy      = TSDB_ALLOC_PSRAM;
-  cfg.buffer_pool_size    = 16 * 1024;
-  cfg.use_paged_allocation= true;
-  cfg.page_size           = 4096;
-#else                                          // 16 MB WROOM-32E (xtensa): no PSRAM
-  // Internal-RAM path, HW-validated after fixing an esp_tsdb bug: its
-  // TSDB_ALLOC_INTERNAL_RAM strategy allocated block buffers with
-  // MALLOC_CAP_INTERNAL only, which can land in IRAM (word-access only) and
-  // faulted on the int16 block stores (LoadStoreError). Fixed to
-  // MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT upstream (zakery292/esp_tsdb#3), in
-  // src/tsdb_buffer.c.
-  cfg.alloc_strategy      = TSDB_ALLOC_INTERNAL_RAM;
-  cfg.buffer_pool_size    = 12 * 1024;
-  cfg.use_paged_allocation= false;
-  cfg.page_size           = 0;
-#endif
+  if(psram_available()) {
+    // P4, and xtensa/S3 modules with PSRAM fitted. Decided at runtime: some
+    // board definitions set BOARD_HAS_PSRAM with none fitted (see psram.h),
+    // and asking for TSDB_ALLOC_PSRAM there fails the whole store.
+    cfg.alloc_strategy      = TSDB_ALLOC_PSRAM;
+    cfg.buffer_pool_size    = 16 * 1024;
+    cfg.use_paged_allocation= true;
+    cfg.page_size           = 4096;
+  } else {
+    // Internal-RAM path, HW-validated after fixing an esp_tsdb bug: its
+    // TSDB_ALLOC_INTERNAL_RAM strategy allocated block buffers with
+    // MALLOC_CAP_INTERNAL only, which can land in IRAM (word-access only) and
+    // faulted on the int16 block stores (LoadStoreError). Fixed to
+    // MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT upstream (zakery292/esp_tsdb#3), in
+    // src/tsdb_buffer.c.
+    cfg.alloc_strategy      = TSDB_ALLOC_INTERNAL_RAM;
+    cfg.buffer_pool_size    = 12 * 1024;
+    cfg.use_paged_allocation= false;
+    cfg.page_size           = 0;
+  }
   esp_err_t e = tsdb_init(&cfg);
   _init_err = (int)e;   // surfaced via /status tsdb_err for diagnosis
   if (e != ESP_OK) {
