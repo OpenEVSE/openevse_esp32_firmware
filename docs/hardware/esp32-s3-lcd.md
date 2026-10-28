@@ -387,6 +387,11 @@ so it runs in a background task while the logger keeps writing to flash; `/statu
 capacity change between builds, or a creation cut short) is discarded and recreated;
 its records are not carried over.
 
+A `POST` to `/sdcard/format` wipes the card and re-provisions it (the energy-log ring and
+the config mirror). It answers at once; `sd_status` then reads `formatting`, then
+`creating log`, then `mounted`. It returns 404 with no card mounted and 409 while a
+format or mount is already running.
+
 **Reading it back.** `/energy/raw?max=500` took 5.9 s on the first bench run. Three
 things, in order of blame: the query cursor read each 32-byte record with its own
 seek + read (a 512-byte sector fetch over the 1-bit bus per record) -- fixed with

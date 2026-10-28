@@ -2770,6 +2770,52 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           description: The migration could not be started
+  /sdcard/format:
+    post:
+      operationId: formatSdCard
+      summary: Format the microSD card
+      description: >-
+        Wipes the microSD card and re-creates the energy-log ring and the config
+        mirror. Runs in the background: the response arrives at once and
+        `sd_status` in `/status` goes from `formatting` to `creating log` to
+        `mounted`. Only on boards with a microSD slot (`ENABLE_SD_CARD`).
+      tags:
+        - System
+      responses:
+        '200':
+          description: The format has started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No card is mounted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '405':
+          description: Only POST is accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '409':
+          description: The card is busy with a format or mount already
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: The format could not be started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
   /debug:
     get:
       operationId: getDebugLog
@@ -2802,6 +2848,28 @@ paths:
           description: Switching protocols
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /debug/heapmap:
+    get:
+      operationId: getHeapMap
+      summary: Internal heap layout
+      description: >-
+        Plain-text layout of the internal (DRAM) heap from `heap_caps_walk()`:
+        the largest live blocks, the largest free gaps and a size histogram.
+        For diagnosing fragmentation without heap tracing. Only on builds with
+        ESP-IDF 5.1 or later.
+      tags:
+        - Diagnostics
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
   /debug/crash:
     get:
       operationId: getCrashSummary
