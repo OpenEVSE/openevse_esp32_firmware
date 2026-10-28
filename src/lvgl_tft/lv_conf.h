@@ -28,7 +28,25 @@
 // lv_used_max snapshot from /status -- LVGL peaks while two screens are
 // briefly live during a transition; re-measure with the host harness before
 // changing this.
+// NOT gated on BOARD_HAS_PSRAM. That symbol comes from the PlatformIO board
+// definition, and the stock TFT board's `board = denky32` sets it
+// unconditionally even though the WROOM-32E fitted has no PSRAM at all. Keying
+// the pool off it put the TFT build down this branch, where
+// heap_caps_malloc(MALLOC_CAP_SPIRAM) returns NULL and lv_tlsf_create_with_pool()
+// stores through it -- StoreProhibited at 0x8, in a boot loop, on shipped
+// hardware. LVGL_POOL_IN_PSRAM is set by the env, which knows what is actually
+// on the board.
+#if defined(LVGL_POOL_IN_PSRAM) && !defined(EPOXY_DUINO)
+// Boards with PSRAM (openevse_s3_lcd): take the pool from external RAM and
+// give it room. Only the widget/style/render scratch lives here; the partial
+// draw buffer stays in internal DRAM (lvgl_panel.cpp).
+#undef LV_MEM_SIZE
+#define LV_MEM_SIZE (64U * 1024U)
+#define LV_MEM_POOL_INCLUDE "lvgl_mem_pool.h"
+#define LV_MEM_POOL_ALLOC(size) lvgl_mem_pool_alloc(size)
+#else
 #define LV_MEM_SIZE (24U * 1024U)
+#endif
 
 // Tick from Arduino millis() on-device. The native/EpoxyDuino host build advances
 // LVGL explicitly from lcd_lvgl.cpp so the C-only LVGL sources don't need to

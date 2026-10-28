@@ -18,6 +18,7 @@
 #include "emoncms.h"
 #include "tesla_client.h"
 #include "manual.h"
+#include "rtc_ds3231.h"
 #include "mqtt.h"
 #include "rfid.h"
 
