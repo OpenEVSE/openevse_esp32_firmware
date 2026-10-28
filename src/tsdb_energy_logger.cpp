@@ -4,6 +4,7 @@
 #include "esp_tsdb.h"
 #include "energy_logger.h"   // MonthlyMetrics, AnnualMetrics, serialize/deserialize
 #include "debug.h"
+#include "fs_usage.h"
 #include <LittleFS.h>
 #include <time.h>
 #include "sd_card.h"
@@ -68,17 +69,24 @@ bool TsdbEnergyLogger::init_db() {
 // write there would trip it just the same.
 #define TSDB_WRITER_STACK   6144
 #define TSDB_WRITER_QUEUE   4
+#define TSDB_USAGE_REFRESH_MS 30000   // same age limit as LFS_USAGE_MAX_AGE_MS
 
 bool TsdbEnergyLogger::start_writer() {
   _jobs = xQueueCreate(TSDB_WRITER_QUEUE, sizeof(TsdbWriteJob));
   if (_jobs == nullptr) return false;
   TaskHandle_t h = nullptr;
+  // First sample here, before the writer exists to hold the lock, so a request
+  // never finds the cache empty and reads LittleFS from loopTask itself.
+  littlefs_usage.refresh(millis());
   if (xTaskCreatePinnedToCore(writer_task, "tsdb_writer", TSDB_WRITER_STACK, this,
                               1, &h, APP_CPU_NUM) != pdPASS) {
     vQueueDelete(_jobs);
     _jobs = nullptr;
     return false;
   }
+  // This task holds the FS lock for the length of each write, so it keeps the
+  // /status and /config usage numbers fresh and loopTask never waits on it.
+  littlefs_usage.setBackgroundSampler();
   return true;
 }
 
@@ -146,7 +154,12 @@ void TsdbEnergyLogger::writer_task(void *arg) {
   TsdbEnergyLogger *self = static_cast<TsdbEnergyLogger *>(arg);
   TsdbWriteJob job;
   for (;;) {
-    if (xQueueReceive(self->_jobs, &job, portMAX_DELAY) != pdTRUE) continue;
+    // Wake at least every TSDB_USAGE_REFRESH_MS even with no jobs: until the
+    // clock is set there are none, and other subsystems write LittleFS too.
+    if (xQueueReceive(self->_jobs, &job, pdMS_TO_TICKS(TSDB_USAGE_REFRESH_MS)) != pdTRUE) {
+      littlefs_usage.refresh(millis());
+      continue;
+    }
     if (job.rollup) self->rollup_yesterday();
 
     // Prefer the card when one is fitted and healthy; fall back to internal
@@ -177,6 +190,7 @@ void TsdbEnergyLogger::writer_task(void *arg) {
       esp_err_t e = tsdb_write(job.ts, job.row);
       if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);
     }
+    littlefs_usage.refresh(millis());
   }
 }
 

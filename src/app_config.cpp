@@ -6,6 +6,7 @@
 #include <ConfigJson.h>
 #include "config_backup.h"
 #include <LittleFS.h>
+#include "fs_usage.h"
 
 #include "app_config.h"
 #ifdef ENABLE_SD_CARD
@@ -790,8 +791,7 @@ bool config_installer_password_set(const char *password)
 {
   // Same route as the ack blob: deserialize() raises the modified flag that
   // commit() requires, and only when the value really changed.
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 128;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   doc["installer_password"] = password;
   if(user_config.deserialize(doc)) {
     user_config.commit();
@@ -1164,8 +1164,13 @@ bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, boo
   doc["psram_size"] = (uint32_t)ESP.getPsramSize();
 #endif
   doc["heap_size"] = (uint32_t)ESP.getHeapSize();
-  doc["littlefs_size"] = (uint32_t)LittleFS.totalBytes();
-  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
+  {
+    // Cached: see fs_usage.h for why this must not touch the filesystem here.
+    uint32_t lfs_total, lfs_used;
+    littlefs_usage.get(millis(), lfs_total, lfs_used);
+    doc["littlefs_size"] = lfs_total;
+    doc["littlefs_used"] = lfs_used;
+  }
 #ifdef ENABLE_SD_CARD
   if(sd_card_mounted()) {
     doc["sd_size"] = sd_card_size();

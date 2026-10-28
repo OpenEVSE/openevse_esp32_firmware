@@ -3,6 +3,7 @@
 #endif
 
 #include "mqtt.h"
+#include "mqtt_reconnect.h"
 #include "app_config.h"
 #include <cstring>
 #include "openevse.h"
@@ -72,7 +73,7 @@ void Mqtt::setup() {
 
   _mqttclient.onClose([this]() {
     DBUGLN("MQTT connection closed");
-    if (_error_time + 100 < millis()) { // Avoid double event if error just occurred
+    if (millis() - _error_time > 100) { // Avoid double event if error just occurred
         this->onMqttDisconnect(-1, "CLOSED");
     }
   });
@@ -82,13 +83,13 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
   Profile_Start(Mqtt_loop);
 
   // Handle MQTT restart requests
-  if (_mqttRestartTime > 0 && millis() > _mqttRestartTime) {
+  if (_mqttRestartTime > 0 && (long)(millis() - _mqttRestartTime) >= 0) {
     _mqttRestartTime = 0;
     if (_mqttclient.connected()) {
       DBUGLN("Disconnecting MQTT for restart");
       _mqttclient.disconnect(); // This should trigger onClose and then onMqttDisconnect
     }
-     _nextMqttReconnectAttempt = 0; // Force immediate reconnect attempt
+     _reconnectNow = true; // Force immediate reconnect attempt
      _connecting = false; // Reset connecting flag
   }
 
@@ -97,7 +98,7 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
   if (_connecting && (millis() - _connectStartTime) > (MQTT_CONNECT_TIMEOUT * 2)) {
     DBUGLN("MQTT connection attempt timed out, will retry");
     _connecting = false;
-    _nextMqttReconnectAttempt = millis() + MQTT_CONNECT_TIMEOUT;
+    _lastMqttConnectAttempt = millis(); // next retry one interval from now
     setError("timeout", "Server not responding");
     JsonDocument doc;
     doc["mqtt_connected"]    = 0;
@@ -109,9 +110,10 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
 
   // Manage connection state
   if (net.isConnected() && config_mqtt_enabled() && !_mqttclient.connected() && !_connecting) {
-    long now = millis();
-    if (now > _nextMqttReconnectAttempt) {
-      _nextMqttReconnectAttempt = now + MQTT_CONNECT_TIMEOUT;
+    unsigned long now = millis();
+    if (mqtt_reconnect_due(_reconnectNow, _lastMqttConnectAttempt, now, MQTT_CONNECT_TIMEOUT)) {
+      _reconnectNow = false;
+      _lastMqttConnectAttempt = now;
       attemptConnection();
     }
   }
@@ -208,7 +210,7 @@ void Mqtt::publishBrokerIp()
 void Mqtt::onMqttConnect() {
   DBUGLN("MQTT connected");
   _connecting = false;
-  _nextMqttReconnectAttempt = 0;
+  _reconnectNow = true; // if this connection drops, retry at once
   _connectedSince  = time(NULL);
   _brokerVersion[0] = '\0';   // fresh — will arrive via $SYS/broker/version
   _errorCategory[0] = '\0';  // clear any prior failure reason
@@ -597,7 +599,7 @@ void Mqtt::restartConnection() {
   _brokerIp[0] = '\0';
   _errorCategory[0] = '\0';   // clear stale failure reason on manual restart
   _errorDetail[0]   = '\0';
-  _nextMqttReconnectAttempt = 0; // reconnect on the very next loop iteration
+  _reconnectNow = true; // reconnect on the very next loop iteration
 
   // Push "connecting" status immediately so the UI reacts
   {

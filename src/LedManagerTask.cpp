@@ -182,7 +182,7 @@ uint8_t buttonShareState = 0;
 
 static uint32_t status_colour_map(u_int8_t lcdcol)
 {
-  u_int32_t color;
+  u_int32_t color = 0xFFFFFF; // WHITE
   switch (lcdcol)
   {
   case OPENEVSE_LCD_OFF:

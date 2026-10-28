@@ -111,9 +111,9 @@ jobs:
       # release job that needs them. Same shape as SIGN_ENABLED below.
       CRASH_ARCHIVE_ENABLED: ${{ secrets.CRASH_ELF_ROLE_ARN != '' && secrets.CRASH_BUCKET != '' && (vars.CRASH_AWS_REGION != '' || secrets.CRASH_AWS_REGION != '') }}
 
-      # Environments whose Arduino core (core-3.x / pioarduino / IDF5) provides
-      # the signed-update verifier. Signed OTA is only enforced on these; add
-      # future core-3.x envs here. Older-core (4MB) envs cannot verify and are
+      # Environments whose Arduino core (core-3.x / espressif32 8.0.0 / IDF5)
+      # provides the signed-update verifier. Signed OTA is only enforced on these;
+      # add future core-3.x envs here. Older-core (4MB) envs cannot verify and are
       # left unsigned.
       SIGNED_OTA_ENVS: '["openevse_wifi_v1_16mb"]'
       # 'true' only when the image-signing key is configured. Keeps signed OTA
@@ -127,11 +127,11 @@ jobs:
         env:
           - nodemcu-32s
           - espressif_esp-wrover-kit
-          - espressif_esp-wrover-kit_latest
           - adafruit_huzzah32_dev
           - adafruit_huzzah32
           - adafruit_featheresp32
           - openevse_wifi_v1
+          - openevse_wifi_v1_rc522
           - olimex_esp32-gateway-old
           - olimex_esp32-gateway-e
           - olimex_esp32-gateway-f
@@ -143,7 +143,7 @@ jobs:
           - esp32-c3-devkitc-02
           - openevse_wifi_tft_v1
           - openevse_wifi_tft_v1_dev
-          # core-3.x (pioarduino / IDF5) — 16MB+ boards
+          # core-3.x (espressif32 8.0.0 / IDF5) — 16MB+ boards
           - openevse_wifi_v1_16mb
           # core-3.x — ESP32-S3 (docs/hardware/esp32-s3-lcd.md)
           - openevse_s3_lcd
@@ -166,18 +166,28 @@ jobs:
     - name: Cache PlatformIO
       uses: actions/cache@v6
       with:
-        path: ~/.platformio
-        key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+        path: |
+          ~/.platformio
+          ~/.platformio-core3
+        # Include the Python version: the ESP-IDF venv under here is built
+        # for whichever interpreter created it, so a 3.15 cache must not be
+        # restored into the 3.14 build.
+        key: ${{ runner.os }}-python-3.14-${{ hashFiles('**/lockfiles') }}
 
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.x'
+        # Pinned: '3.x' resolves to 3.15 on the runner, and the ESP-IDF
+        # toolchain espressif32 installs for the core-3.x (espidf) envs
+        # rejects anything newer than 3.14 ("Python version must be 3.10
+        # ... 3.14"), so openevse_wifi_v1_16mb fails before it compiles.
+        # Unpin once the toolchain accepts 3.15.
+        python-version: '3.14'
 
     - name: Install PlatformIO
       # Pinned: PlatformIO Core 6.2.0 bumped its bundled build engine to
       # SCons 4.11.1 (tool-scons@4.41101.0), which fails every core-3.x
-      # (pioarduino, arduino+espidf hybrid) env at the final link step with
+      # (arduino+espidf hybrid) env at the final link step with
       # `ModuleNotFoundError: No module named 'SCons.Tool.FortranCommon'`
       # (openevse_wifi_v1_16mb, openevse_wifi_tft_v1[_dev]). 6.1.19 is the
       # last release still on SCons 4.8.1 (tool-scons@4.40801.0), which
@@ -206,7 +216,8 @@ jobs:
       # this step on pio's exit code, not tee's.
       run: |
         set -o pipefail
-        pio run -e ${{ matrix.env }} 2>&1 | tee pio-build-${{ matrix.env }}.log
+        export PLATFORMIO_BIN="$(command -v pio)"
+        scripts/pio run -e ${{ matrix.env }} 2>&1 | tee pio-build-${{ matrix.env }}.log
 
     - name: Check flash usage
       # Runs whether or not the build above succeeded: PlatformIO's own size
