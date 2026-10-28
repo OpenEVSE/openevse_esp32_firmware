@@ -235,7 +235,8 @@ LedManagerTask::LedManagerTask() :
   wifiConnected(false),
   flashState(false),
   brightness(LED_DEFAULT_BRIGHTNESS),
-  onStateChange(this)
+  onStateChange(this),
+  onSettingsChanged(this)
 {
 }
 
@@ -243,6 +244,9 @@ void LedManagerTask::begin(EvseManager &evse)
 {
   _evse = &evse;
   _evse->onStateChange(&onStateChange);
+  // The charging breath period follows the pilot, which changes without a
+  // state change.
+  _evse->onSettingsChanged(&onSettingsChanged);
   MicroTask.startTask(this);
 }
 
@@ -321,7 +325,7 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
          LedState_WiFi_Client_Connected == state ? "LedState_WiFi_Client_Connected" :
          "UNKNOWN");
 
-  if(onStateChange.IsTriggered()) {
+  if(onStateChange.IsTriggered() || onSettingsChanged.IsTriggered()) {
     setNewState(false);
   }
 
