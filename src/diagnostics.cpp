@@ -23,12 +23,12 @@
 #include <esp_core_dump.h>
 #include <esp_partition.h>
 
-// heap_caps_walk() and its walker_*_t types arrived in IDF 5.1. This has to be
+// heap_caps_walk() and its walker_*_t types arrived in IDF 5.3. This has to be
 // a nested test, not `DIAG_HAVE_IDF && ESP_IDF_VERSION >= ...`: the preprocessor
 // parses the whole #if expression even when the left side is 0, so on the host
 // build (no esp_idf_version.h) the undefined function-like ESP_IDF_VERSION_VAL
 // is a syntax error -- "missing binary operator before token (".
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 1, 0)
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
 #define DIAG_HAVE_HEAP_WALK 1
 #else
 #define DIAG_HAVE_HEAP_WALK 0
@@ -576,7 +576,7 @@ bool diagnostics_coredump_erase()
 // ---------------------------------------------------------------------------
 // Internal-heap layout report
 // ---------------------------------------------------------------------------
-// Needs heap_caps_walk() (IDF 5.1+). The default [env] still builds against
+// Needs heap_caps_walk() (IDF 5.3+). The default [env] still builds against
 // core 2.x / IDF 4.4 and the host build has no IDF at all; the "n/a" fallback
 // below covers both.
 #if DIAG_HAVE_HEAP_WALK
