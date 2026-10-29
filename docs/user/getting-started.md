@@ -2,8 +2,9 @@
 
 ## Supported hardware
 
-Most ESP32 boards can run this firmware (see `platformio.ini` for the full
-list); the best-supported board is the **OpenEVSE WiFi V1** module. Wired
+Most ESP32 boards can run this firmware (see `platformio.ini` and
+`platformio_community.ini` for the full list); the best-supported board is the
+**OpenEVSE WiFi V1** module. Wired
 Ethernet is supported on the [Olimex ESP32 Gateway](../wired-ethernet.md) and
 similar boards.
 
