@@ -1,6 +1,8 @@
 # Flash budget — `openevse_wifi_v1` and the other 4MB boards
 
-`platformio.ini` currently defines 24 environments in total: 4 are
+The PlatformIO config (`platformio.ini` and the `platformio_native.ini` and
+`platformio_community.ini` files it loads) currently defines 24 environments
+in total: 4 are
 `native_*` host builds (`native_test`, `native_openevse`,
 `native_openevse_lvgl`, `native_simulator`) with no flash partition at all,
 and of the remaining 20 ESP32 target environments, 17 build against the 4MB
