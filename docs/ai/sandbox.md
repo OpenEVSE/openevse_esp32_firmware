@@ -109,7 +109,7 @@ actually run, and add any domain your mirror or proxy needs.
     "filesystem": {
       "allowWrite": [
         "~/.platformio",
-        "~/.platformio-core3",
+        "~/.platformio-core2",
         "~/.cache",
         "~/.npm"
       ],
@@ -258,7 +258,7 @@ into `.claude/settings.local.json`.
   browser CDNs, and `api.anthropic.com`. Everything else is blocked. No domains are
   allowed by default, so this list is the whole surface.
 - **Persistent toolchain caches** (`sandbox.filesystem.allowWrite`) — `~/.platformio`
-  and `~/.platformio-core3` stay writable so the ~500 MB toolchain (and the core-3
+  and `~/.platformio-core2` stay writable so the ~500 MB toolchain (and the core-2
   variant) isn't re-downloaded each session. The project `.pio/` dir is already writable
   as the working directory, which matters because the build hook
   [`scripts/extra_script.py`](../../scripts/extra_script.py) patches files inside
