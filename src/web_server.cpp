@@ -28,6 +28,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "emonesp.h"
 #include "web_server.h"
 #include "diagnostics.h"
+#include "fs_usage.h"
 #include "crash_report.h"
 #include "crash_report_id.h"
 #include "crash_payload.h"
@@ -398,7 +399,11 @@ void handleLogin(MongooseHttpServerRequest *request, bool isHttps)
   response->addHeader(F("Cache-Control"), F("no-store"));
 
   if(HTTP_POST != request->method()) {
+    // Always write a body: an empty response stream never sets its content
+    // length, so ArduinoMongoose sends Content-Length: (size_t)-1 and a
+    // keep-alive client hangs waiting for it.
     response->setCode(405);
+    response->print(F("{\"msg\":\"method not allowed\"}"));
     request->send(response);
     return;
   }
@@ -492,7 +497,13 @@ void handleLogout(MongooseHttpServerRequest *request)
   MongooseHttpServerResponseStream *response = request->beginResponseStream();
   response->setContentType(CONTENT_TYPE_JSON);
   response->addHeader(F("Cache-Control"), F("no-store"));
-  if(HTTP_POST != request->method()) { response->setCode(405); request->send(response); return; }
+  if(HTTP_POST != request->method()) {
+    // Body required, see handleLogin().
+    response->setCode(405);
+    response->print(F("{\"msg\":\"method not allowed\"}"));
+    request->send(response);
+    return;
+  }
   response->addHeader(F("Set-Cookie"), F("oevse_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"));
   response->setCode(200);
   response->print(F("{\"msg\":\"ok\"}"));
@@ -604,40 +615,13 @@ static String html_escape(const String &input) {
 
 // LittleFS.totalBytes() and LittleFS.usedBytes() each run lfs_fs_size(), a
 // full traversal of every metadata pair and data block in the filesystem,
-// reading flash with the FS lock held. Arduino's wrapper discards whichever
-// half of esp_littlefs_info() you did not ask for, so reporting both numbers
-// cost three traversals per request.
-//
-// That made /status the most expensive poll on the device, and expensive in
-// proportion to how full the filesystem is: measured on hardware, a trivial
-// JSON endpoint answers in 11ms while /status took 94ms on a box with 57KB
-// used and 143ms on one with 237KB used. The TSDB store grows, so the cost
-// grows with it. With evcc and the Home Assistant integration polling, the
-// main loop was stalled on flash reads several percent of the time -- and
-// nothing drains the network stack while it is.
-//
-// These two numbers only move when something writes, so sample them on a
-// timer rather than per request.
-#define LFS_STATUS_SAMPLE_MS 30000
-
-static void status_littlefs_usage(uint32_t &free_bytes, uint32_t &used_bytes)
-{
-  static uint32_t sampled_at = 0;
-  static uint32_t cached_free = 0;
-  static uint32_t cached_used = 0;
-
-  uint32_t now = millis();
-  if(0 == sampled_at || (now - sampled_at) >= LFS_STATUS_SAMPLE_MS)
-  {
-    size_t total = LittleFS.totalBytes();
-    cached_used = (uint32_t)LittleFS.usedBytes();
-    cached_free = (uint32_t)(total - cached_used);
-    sampled_at = now;
-  }
-
-  free_bytes = cached_free;
-  used_bytes = cached_used;
-}
+// reading flash with the FS lock held. Measured on hardware, a trivial JSON
+// endpoint answers in 11ms while /status took 94ms on a box with 57KB used and
+// 143ms on one with 237KB used, and the TSDB store grows. With evcc and the
+// Home Assistant integration polling, the main loop was stalled on flash reads
+// several percent of the time -- and nothing drains the network stack while it
+// is. The numbers only move when something writes, so /status reports the
+// cached sample from fs_usage.h instead.
 
 void buildStatus(JsonDocument &doc) {
 
@@ -699,9 +683,9 @@ void buildStatus(JsonDocument &doc) {
   doc["free_heap"] = ESPAL.getFreeHeap();
   diagnostics_status(doc);
   {
-    uint32_t lfs_free, lfs_used;
-    status_littlefs_usage(lfs_free, lfs_used);
-    doc["littlefs_free"] = lfs_free;
+    uint32_t lfs_total, lfs_used;
+    littlefs_usage.get(millis(), lfs_total, lfs_used);
+    doc["littlefs_free"] = lfs_total > lfs_used ? lfs_total - lfs_used : 0;
     doc["littlefs_used"] = lfs_used;
   }
 
@@ -2446,6 +2430,21 @@ static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
     diagnostics_coredump_json(doc);
     response->setCode(200);
     serializeJson(doc, *response);
+    request->send(response);
+  });
+
+  // GET /debug/heapmap  plain-text layout of the INTERNAL heap (largest live
+  // blocks, largest free gaps, size histogram) via heap_caps_walk(). For
+  // answering "what is fragmenting DRAM" without heap tracing.
+  server.on("/debug/heapmap", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+      return;
+    }
+    String report;
+    diagnostics_heapmap(report);
+    response->setCode(200);
+    response->print(report);
     request->send(response);
   });
 
