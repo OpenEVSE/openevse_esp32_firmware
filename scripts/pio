@@ -25,7 +25,7 @@
 set -euo pipefail
 
 # Envs that build on the core-3 platform (${common.platform_core3}), derived from
-# platformio.ini rather than listed here.
+# platformio.ini and the extra_configs files it loads rather than listed here.
 #
 # This used to be a hand-maintained list, and it silently went stale when
 # openevse_wifi_tft_v1 moved to core-3: a core-3 env routed to the core-2
@@ -40,8 +40,12 @@ set -euo pipefail
 # one wins, matching PlatformIO's own merge order; a section's own `platform`
 # always beats anything it inherits.
 CORE3_ENVS="$(python3 - "$(dirname "$0")/../platformio.ini" <<'PYEOF'
-import re, sys
-text = open(sys.argv[1]).read()
+import os, re, sys
+main = open(sys.argv[1]).read()
+root = os.path.dirname(os.path.abspath(sys.argv[1]))
+extra = re.search(r'^extra_configs\s*=([^\n]*(?:\n[ \t]+[^\n]*)*)', main, re.M)
+extra_files = [f for f in re.split(r'[,\s]+', extra.group(1)) if f] if extra else []
+text = main + ''.join('\n' + open(os.path.join(root, f)).read() for f in extra_files)
 sections = dict(re.findall(r'^\[([^\]]+)\]\n(.*?)(?=^\[|\Z)', text, re.M | re.S))
 
 def parents(body):
