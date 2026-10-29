@@ -42,6 +42,7 @@ class LedManagerTask : public MicroTasks::Task
     uint8_t brightness;
 
     MicroTasks::EventListener onStateChange;
+    MicroTasks::EventListener onSettingsChanged;
 
 #if RGB_LED
 #if defined(NEO_PIXEL_PIN) && defined(NEO_PIXEL_LENGTH) && defined(ENABLE_WS2812FX)

@@ -2433,6 +2433,21 @@ static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
     request->send(response);
   });
 
+  // GET /debug/heapmap  plain-text layout of the INTERNAL heap (largest live
+  // blocks, largest free gaps, size histogram) via heap_caps_walk(). For
+  // answering "what is fragmenting DRAM" without heap tracing.
+  server.on("/debug/heapmap", [](MongooseHttpServerRequest *request) {
+    MongooseHttpServerResponseStream *response;
+    if(false == requestPreProcess(request, response, CONTENT_TYPE_TEXT)) {
+      return;
+    }
+    String report;
+    diagnostics_heapmap(report);
+    response->setCode(200);
+    response->print(report);
+    request->send(response);
+  });
+
   server.on("/debug/crash/raw", [](MongooseHttpServerRequest *request) {
     dumpRequest(request);
 

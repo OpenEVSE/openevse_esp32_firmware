@@ -2802,6 +2802,28 @@ paths:
           description: Switching protocols
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /debug/heapmap:
+    get:
+      operationId: getHeapMap
+      summary: Internal heap layout
+      description: >-
+        Plain-text layout of the internal (DRAM) heap from `heap_caps_walk()`:
+        the largest live blocks, the largest free gaps and a size histogram.
+        For diagnosing fragmentation without heap tracing. Only on builds with
+        ESP-IDF 5.3 or later.
+      tags:
+        - Diagnostics
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
   /debug/crash:
     get:
       operationId: getCrashSummary

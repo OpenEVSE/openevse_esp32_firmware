@@ -59,6 +59,10 @@ Developers chasing a crash can fetch the raw dump from
 `/debug/crash/raw` and decode it with `esp-coredump` against the exact
 `firmware.elf` the unit is running -- the `elf_sha256` field says which build
 that is.
+For a reboot that looks like heap exhaustion rather than a crash,
+`/debug/heapmap` prints the layout of the internal heap -- the largest live
+blocks, the largest free gaps and a size histogram -- which shows whether it is
+fragmented (ESP-IDF 5.3+ builds only).
 
 ### Sending a crash report to OpenEVSE
 
