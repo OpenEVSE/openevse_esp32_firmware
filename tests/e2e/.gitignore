@@ -1,0 +1,5 @@
+node_modules/
+.features-gen/
+playwright-report/
+test-results/
+output/
