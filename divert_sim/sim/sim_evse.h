@@ -31,6 +31,10 @@ public:
   double min_current = 6.0;
   double max_current_hw = 32.0;
 
+  // Controller's configured maximum ("station current", max_current_soft),
+  // reported as cmaxamps by $GC and set by $SC <amps> M.
+  long max_configured = 32;
+
   // RAPI-visible state. Updated by the RapiSender shim and read by the runner.
   long pilot = 32;
   long state = OPENEVSE_STATE_CONNECTED;
@@ -46,6 +50,9 @@ public:
   // Optional non-battery load requested by the EV while connected, e.g. cabin
   // pre-conditioning after the traction battery has finished charging.
   double aux_load_kw = 0.0;
+
+  // EVSE temperature (deg C) reported over $GP; drives temperature throttling.
+  double temperature = 20.0;
 
   // EV battery model
   double battery_capacity_kwh = 75.0;

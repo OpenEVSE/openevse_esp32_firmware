@@ -10,10 +10,8 @@
 #include "rfid.h"
 
 #include "debug.h"
-#include "mqtt.h"
 #include "lcd.h"
 #include "app_config.h"
-#include "input.h"
 #include "openevse.h"
 #include "event.h"
 

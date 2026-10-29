@@ -225,6 +225,27 @@ def run_scenario(
             temp_scenario.unlink()
 
 
+def run_scenario_doc(
+    scenario_doc: Dict[str, Any],
+    output: str = "",
+    config_overrides: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, str]]:
+    """Run an in-memory scenario document (e.g. one built by a test).
+
+    The document is written next to the scenario corpus so relative CSV and
+    config_include references resolve the same way as for files on disk.
+    """
+    with tempfile.NamedTemporaryFile(
+        "w", suffix=".json", delete=False, dir=SCENARIO_DIR
+    ) as tf:
+        json.dump(scenario_doc, tf)
+        path = Path(tf.name)
+    try:
+        return run_scenario(str(path), output, config_overrides=config_overrides)
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def build_index(
     config_overrides: Optional[Dict[str, Any]] = None,
     profile_suffix: Optional[str] = None,
