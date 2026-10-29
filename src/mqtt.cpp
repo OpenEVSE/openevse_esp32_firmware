@@ -284,7 +284,11 @@ void Mqtt::onMqttDisconnect(int err, const char *reason) {
   doc["mqtt_close_reason"] = reason;
   doc["mqtt_error"]        = _errorCategory;
   doc["mqtt_error_detail"] = _errorDetail;
-  event_send(doc);
+  // Web clients only. This runs from the client's onError, and the wrapper
+  // still reports connected() while the connection is closing, so publishing
+  // here re-enters: a failed publish raises onError again, which publishes
+  // again, until the stack overflows.
+  web_server_event(doc);
 }
 
 void Mqtt::subscribeTopics() {
