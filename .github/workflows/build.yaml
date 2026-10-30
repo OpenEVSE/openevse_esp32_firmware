@@ -140,6 +140,7 @@ jobs:
           - olimex_esp32-poe-iso
           - heltec_esp32-wifi-lora-v2
           - wt32-eth01
+          - lilygo-t-eth-lite-rtl8201
           - esp32-c3-devkitc-02
           - openevse_wifi_tft_v1
           - openevse_wifi_tft_v1_dev
