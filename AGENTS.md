@@ -10,14 +10,13 @@ references: [docs/developer/architecture.md](docs/developer/architecture.md),
 ESP32 WiFi gateway firmware for OpenEVSE charging stations. It talks RAPI
 (serial) to an ATmega/SAMD controller and provides the web UI, HTTP/WebSocket
 API, MQTT, solar divert, OCPP 1.6, scheduling, and energy logging. The web UI
-is the **`gui-nightshift` git submodule** (Svelte 5) — `gui-v2` is the legacy
-UI, only used if explicitly selected.
+is the **`gui-nightshift` git submodule** (Svelte 5).
 
 ## Bootstrap and build
 
 ```bash
 git submodule update --init --recursive
-cd gui-nightshift && npm install && npm run build && cd ..
+cd gui-nightshift && npm ci && npm run build && cd ..
 pio run -e openevse_wifi_v1        # default 4MB board
 ```
 
@@ -30,7 +29,9 @@ two-core (IDF4/IDF5) subtleties: [docs/developer/building.md](docs/developer/bui
 Agent work can run behind Claude Code's built-in Bash sandbox — an egress allowlist plus
 filesystem/credential guards. That part is **opt-in and per-developer**: paste the starting
 point from [docs/ai/sandbox.md](docs/ai/sandbox.md) into your gitignored
-`.claude/settings.local.json`. On Linux/WSL2 first `sudo apt-get install bubblewrap socat`,
+`.claude/settings.local.json`. Running in a Claude Code on the web **cloud environment**
+instead? See [docs/ai/cloud-environment.md](docs/ai/cloud-environment.md) — a different,
+environment-level network policy that needs `*.platformio.org` allowed or every build fails. On Linux/WSL2 first `sudo apt-get install bubblewrap socat`,
 and on Ubuntu 24.04+ add the `bwrap` AppArmor profile or every command fails with a
 `nested userns` error (especially in the VS Code extension). The `/sandbox` panel (terminal
 CLI only) shows the resolved policy. With it on, build/test commands run without prompts;
@@ -44,6 +45,7 @@ What *is* checked in — and applies whether or not you sandbox — is
 
 ```bash
 cd gui-nightshift && npm test && cd ..        # UI unit tests (vitest)
+pio run -e native_simulator                   # builds the binary divert_sim's pytest drives
 cd divert_sim && pip install -r requirements.txt && pytest -v && cd ..
 pio test -e native_test                       # host-side firmware unit tests
 ```
@@ -91,6 +93,7 @@ their CI cannot push — and `--pr` says so if you hit one.
 
 ```bash
 cd gui-nightshift && npm run build && npm test && cd ..
+pio run -e native_simulator                   # builds the binary divert_sim's pytest drives
 cd divert_sim && pytest -v && cd ..
 git submodule status        # must show a clean, pushed state
 ```

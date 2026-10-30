@@ -30,8 +30,28 @@ explicit dependencies. Order matters:
 7. `energyLogger.begin()`, `mqtt.begin()`, `ocpp.begin()`, `shaper.begin()`, `tempThrottle.begin()`
 
 `loop()` drives: `Mongoose.poll(0)` (non-blocking network I/O),
-`MicroTask.update()` (cooperative task scheduler), the RAPI sender, EmonCMS
-publishing, and a 30-second Ohm Connect check.
+`MicroTask.update()` (cooperative task scheduler), the RAPI sender and EmonCMS
+publishing.
+
+## mDNS and peer discovery
+
+`NetManagerTask` starts ArduinoMongoose's `Mdns` listener after an interface is
+up. The same listener advertises `<hostname>.local`, `_http._tcp` and
+`_openevse._tcp`, resolves `.local` client destinations, and browses for peers.
+The OpenEVSE service retains its `type`, `version`, `id` and `ssl` TXT keys and
+the active HTTP/HTTPS port. Interface/reconnect and advertised configuration
+changes restart the listener and clear its address cache.
+
+`LoadSharingDiscoveryTask` uses `Mdns.browse()` and takes a `Mdns.services()`
+snapshot after its query window. Mongoose assembles DNS-SD responses and fetches
+missing records in the normal event loop; discovery does not wait on an IDF
+semaphore. The firmware uses the SRV target as the peer hostname, filters its
+own device ID, and prefers an IPv4 address on the local subnet.
+
+ArduinoOTA's built-in mDNS is disabled. When OTA is enabled on hardware,
+NetworkManager registers `_arduino._tcp:3232` and the Arduino IDE TXT fields on
+the shared listener. Native builds use the same Mongoose discovery path and
+do not link EpoxymDNS/Avahi or require a host mDNS daemon.
 
 ## EvseManager and the client/priority system
 
@@ -45,7 +65,7 @@ numeric priority (higher number = higher authority):
 | 50 | Divert |
 | 100 | Timer / Scheduler |
 | 200 | Boost |
-| 500 | API / MQTT / Ohm |
+| 500 | API / MQTT |
 | 1000 | Manual |
 | 1030 | RFID |
 | 1050 | OCPP |
@@ -86,11 +106,23 @@ Every config option appears in exactly three places:
 3. **`ConfigOptDefinition` entry** in the `opts[]` array in `src/app_config.cpp`
 
 Boolean flags use bit positions in a `uint32_t flags` variable with `#define`
-macros. Change notifications use `onChanged()` callbacks with prefix matching
-(e.g. `name.startsWith("mqtt_")`) to fan out updates to affected subsystems.
+macros, exposed individually via `ConfigOptVirtualMaskedBool`. All 32 bits of
+`flags` are now in use (one, bit 2, is permanently retired rather than reused —
+see [invariants.md](../ai/invariants.md)), so new flags go in a second
+`flags2` word instead. Change notifications use `onChanged()` callbacks with
+prefix matching (e.g. `name.startsWith("mqtt_")`) to fan out updates to
+affected subsystems.
 
 The divert simulator's `test_config.py` suite asserts default config values —
 update those assertions whenever changing defaults in `app_config.cpp`.
+
+Two options are internal state rather than user settings, and are stripped from
+the `/config` response: `notification_acks` (the acknowledged-advisory store)
+and `notification_acks_fw` (the firmware build those acknowledgements were made
+against, so a firmware update clears them). Write them through
+`config_save_notification_acks()` — assigning the globals and calling
+`commit()` does **not** persist, because `ConfigJson::commit()` returns early
+unless `deserialize()` has marked the config modified.
 
 ## Key subsystems
 
@@ -109,14 +141,14 @@ update those assertions whenever changing defaults in `app_config.cpp`.
 | `limit.h/.cpp` | Session energy/time/SOC/range limits |
 | `current_shaper.h/.cpp` | Grid-level power cap enforcement with smoothing |
 | `temp_throttle.h/.cpp` | Current reduction on over-temperature |
+| `notifications.h/.cpp`, `notifications_rules.h/.cpp`, `notifications_acks.h/.cpp` | Non-fault advisories: a pure rule table over EvseManager state, a 5 s MicroTask, and a persisted acknowledgement store |
 | `ocpp.h/.cpp` | OCPP 1.6 via the MicroOcpp library |
-| `rfid.h/.cpp` | RFID card auth, PN532 NFC module (optional) |
+| `rfid.h/.cpp` | RFID card auth, PN532 (I2C) or RC522 (SPI) reader (optional) |
 | `net_manager.h/.cpp` | WiFi / wired Ethernet, OTA capability |
-| `lcd.h/.cpp`, `lcd_tft.h/.cpp` | Character LCD and TFT touchscreen display |
+| `lcd.h/.cpp`, `lcd_lvgl.h/.cpp`, `src/lvgl_tft/` | Character LCD and LVGL TFT touchscreen display |
 | `time_man.h/.cpp` | SNTP sync, POSIX timezone strings |
 | `certificates.h/.cpp` | SSL cert store under `/certificates/` on LittleFS |
 | `tesla_client.h/.cpp` | Tesla API (SOC, range, ETA) |
-| `ohm.h/.cpp` | Ohm Connect demand-response integration |
 
 ## Energy logging
 

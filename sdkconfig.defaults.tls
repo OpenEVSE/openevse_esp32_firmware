@@ -14,7 +14,7 @@
 # from source: the component's CMakeLists emits the `-Wl,--wrap=mbedtls_ssl_*`
 # link flags that redirect the callers to the dynamic-buffer shims. The
 # prebuilt Arduino-libs path cannot do that, which is why this fork previously
-# carried 12 hand-written `-Wl,--wrap` flags that pioarduino dropped.
+# carried 12 hand-written `-Wl,--wrap` flags that the prebuilt path dropped.
 #
 # HAZARD: editing this file does NOT by itself trigger a cmake reconfigure —
 # PlatformIO only stats sdkconfig.defaults. Delete the generated

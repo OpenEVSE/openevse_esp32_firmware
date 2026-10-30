@@ -103,8 +103,8 @@ bool web_static_handle(MongooseHttpServerRequest *request)
     if (enableCors) {
       response->addHeader(F("Access-Control-Allow-Origin"), F("*"));
     }
-    if(file->compressed) {
-      response->addHeader(F("Content-Encoding"), F("gzip"));
+    if(file->encoding) {
+      response->addHeader(F("Content-Encoding"), file->encoding);
     }
 
     // Quoted, per RFC 7232. Sending a bare tag is what broke this: browsers

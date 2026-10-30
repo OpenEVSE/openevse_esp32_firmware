@@ -95,17 +95,30 @@ hostname, static IP, or device id via `POST /loadsharing/peers`.
 
 ### 2) Group configuration (controller)
 
-Set `loadsharing_role` to `"controller"` (typically via the web UI), enable load
-sharing, and add peers. The controller pushes group settings to each member with
+`loadsharing_role` is a plain bool: `false` (the default) is controller,
+`true` is member — there is no manual role selection in the web UI. Every
+device is a controller from the moment load sharing is enabled; add peers
+and it manages them. The controller pushes group settings to each member with
 `POST http://{member}/config` after the WebSocket connection is up. That push
-sets the peer’s role to `"member"` and stores `loadsharing_controller_host`.
+sets the peer’s role to `true` (member) and stores `loadsharing_controller_host` —
+this is what actually turns a freshly-joined peer into a member, automatically,
+with no config step of its own. A member can leave on its own (e.g. if the
+controller is unreachable) by POSTing `{"loadsharing_role": false}` to its own
+`/config`, which resets it back to a standalone controller.
+
+`loadsharing_role` was a string (`""`, `"controller"`, `"member"`) before this
+change; a device already carrying a persisted legacy value normalizes it to
+the equivalent bool on load, and a peer still sending the legacy string
+(mixed old/new firmware during a rolling upgrade) is read the same way on
+receipt — see `loadSharingRoleFromJson()` in `loadsharing_types.h`. This is
+an alpha feature, so no other backward-compatibility is provided.
 
 Key config fields (see theory doc §4.1 for the full table):
 
 | Key | Default | Notes |
 |-----|---------|-------|
 | `loadsharing_enabled` | `false` | Master enable |
-| `loadsharing_role` | `""` | `""`, `"controller"`, or `"member"` |
+| `loadsharing_role` | `false` | `false` = controller, `true` = member |
 | `loadsharing_group_max_current` | `0` | Group circuit limit (A) |
 | `loadsharing_safety_factor` | `1.0` | De-rate `[0..1]` |
 | `loadsharing_heartbeat_timeout` | `30` | Seconds; member allocation staleness |
@@ -206,10 +219,15 @@ manually; automatic election is future work.
 
 ## Configuration lockout on members
 
-When `loadsharing_role == "member"`:
+When `loadsharing_role == true` (member):
 
-- Local `POST /config` **strips** `loadsharing_*` keys unless the post is a
-  controller push that sets `loadsharing_role` to `"member"`.
+- Local `POST /config` **rejects the whole request with HTTP 403** if it
+  contains any `loadsharing_*` key, unless the body is exactly one of the two
+  legitimate role transitions: a controller re-affirming membership
+  (`loadsharing_role: true` + `loadsharing_controller_host`) or this device
+  leaving the group on its own (`loadsharing_role: false`), with no other
+  `loadsharing_*` keys riding along — see "Group configuration (controller)"
+  above. It's all-or-nothing: a rejected request never partially applies.
 - Intended behaviour (theory INV-7): peer management writes on members should
   be rejected. Treat hard HTTP 403 on `/loadsharing/peers` as a target; verify
   against current firmware if relying on it.

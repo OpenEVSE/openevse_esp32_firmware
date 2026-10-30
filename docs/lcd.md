@@ -3,9 +3,8 @@
 This document describes how the ESP32 gateway drives the 2-line × 16-character
 text LCD on the OpenEVSE controller, and what is shown in each state.
 
-It applies to the character-LCD builds only. The TFT touchscreen
-(`ENABLE_SCREEN_LCD_TFT`) and LVGL (`ENABLE_SCREEN_LVGL_TFT`) variants have
-their own UI and are not covered here.
+It applies to the character-LCD builds only. The LVGL TFT variant
+(`ENABLE_SCREEN_LVGL_TFT`) has its own UI and is not covered here.
 
 ## Ownership model
 
@@ -71,7 +70,7 @@ The status screen has two independently managed lines:
 | Sleeping — schedule/timer | `Paused Timer` | Bottom line rotation includes the next `Start` time |
 | Sleeping — manual override | `Paused Manual` | Front button or web/API manual stop |
 | Sleeping — session limit reached | `Limit Reached` | Energy/time/SOC/range limit |
-| Sleeping — remote pause | `Paused Remote` | OCPP, MQTT or Ohm Connect claim |
+| Sleeping — remote pause | `Paused Remote` | OCPP or MQTT claim |
 | Sleeping — other/unknown cause | `zzZ Sleeping Zzz` | E.g. paused directly on the controller |
 | Fault | Two fixed lines | e.g. `SAFETY ERROR` / `GROUND FAULT`, `VEHICLE ERROR` / `VENT REQUIRED` |
 

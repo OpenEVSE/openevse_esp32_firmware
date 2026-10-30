@@ -20,6 +20,8 @@
 #ifndef __EVENT_LOG_REPEAT_H
 #define __EVENT_LOG_REPEAT_H
 
+#include <string.h>
+
 #include <stdint.h>
 
 // How long an entry suppresses identical successors. A long unchanging session
@@ -44,6 +46,7 @@
 #define EVENTLOG_CHANGE_DIVERT      0x0040
 #define EVENTLOG_CHANGE_SHAPER      0x0080
 #define EVENTLOG_CHANGE_PERIODIC    0x0100  // nothing visible moved; the interval lapsed
+#define EVENTLOG_CHANGE_NOTIFICATION 0x0200 // a different advisory id from the last row
 
 // evseFlags bits that must not, on their own, create an entry: they mirror
 // state the log already records, so a row whose only difference is one of them
@@ -75,6 +78,11 @@ struct EventLogEntryKey
   uint32_t pilot;
   uint8_t divertMode;
   uint8_t shaper;
+  // The advisory id for a notification row, empty for every other row. Part
+  // of the key so two different advisories raised against the same EVSE state
+  // are two entries, not one entry and a suppressed repeat. Sized for the
+  // longest id in the rule table ("wear.stuck_relay_recovery") with room.
+  char notification[32];
 
   bool operator==(const EventLogEntryKey &rhs) const
   {
@@ -84,7 +92,8 @@ struct EventLogEntryKey
            evseFlags == rhs.evseFlags &&
            pilot == rhs.pilot &&
            divertMode == rhs.divertMode &&
-           shaper == rhs.shaper;
+           shaper == rhs.shaper &&
+           0 == strncmp(notification, rhs.notification, sizeof(notification));
   }
 
   bool operator!=(const EventLogEntryKey &rhs) const
@@ -99,7 +108,7 @@ class EventLogRepeatFilter
     EventLogRepeatFilter() :
       _have_last(false),
       _last_time(0),
-      _last({0, 0, 0, 0, 0, 0, 0})
+      _last()
     {
     }
 
@@ -144,6 +153,9 @@ class EventLogRepeatFilter
       if(_last.pilot != key.pilot)               changed |= EVENTLOG_CHANGE_PILOT;
       if(_last.divertMode != key.divertMode)     changed |= EVENTLOG_CHANGE_DIVERT;
       if(_last.shaper != key.shaper)             changed |= EVENTLOG_CHANGE_SHAPER;
+      if(0 != strncmp(_last.notification, key.notification, sizeof(key.notification))) {
+        changed |= EVENTLOG_CHANGE_NOTIFICATION;
+      }
 
       return changed;
     }

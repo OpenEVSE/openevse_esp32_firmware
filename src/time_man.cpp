@@ -4,11 +4,6 @@
 
 #include <Arduino.h>
 #include <MongooseCore.h>
-#ifdef EPOXY_DUINO
-#include <netdb.h>
-#else
-#include <lwip/netdb.h>
-#endif
 
 #include "debug.h"
 #include "time_man.h"
@@ -36,9 +31,44 @@ TimeManager::TimeManager() :
   _fetchingTime(false),
   _setTheTime(false),
   _lastSyncTime(0),
-  _syncRequested(false)
+  _syncRequested(false),
+  _dhcpEnabled(true),
+  _dhcpFailedOver(false),
+  _activeHost(NULL)
 {
   _resolvedIp[0] = '\0';
+  _dhcpHost[0] = '\0';
+}
+
+const char *TimeManager::pickHost()
+{
+  if(_dhcpEnabled && _dhcpHost[0] != '\0' && !_dhcpFailedOver) {
+    return _dhcpHost;
+  }
+  return _timeHost;
+}
+
+void TimeManager::fetchFailed()
+{
+  _fetchingTime = false;
+  if(_activeHost == _dhcpHost && _retryCount + 1 >= SNTP_DHCP_FALLBACK_AFTER)
+  {
+    // The DHCP-supplied server isn't answering: switch to the configured
+    // host straight away for the rest of this cycle. The next scheduled poll
+    // (or a config change) goes back to trying DHCP first.
+    DBUGF("NTP: DHCP server %s not answering, falling back to %s", _dhcpHost, _timeHost ? _timeHost : "(none)");
+    _dhcpFailedOver = true;
+    _retryCount++;
+    _nextCheckTime = millis();
+    _resolvedIp[0] = '\0';   // the DNS badge now describes the configured host
+  }
+  else
+  {
+    unsigned long delay = retryDelay();
+    _retryCount++;
+    _nextCheckTime = millis() + delay;
+  }
+  MicroTask.wakeTask(this);
 }
 
 unsigned long TimeManager::retryDelay()
@@ -55,6 +85,18 @@ unsigned long TimeManager::retryDelay()
                   ? _retryCount
                   : (uint8_t)(sizeof(delays) / sizeof(delays[0]) - 1);
   return delays[idx];
+}
+
+// Records the address Mongoose resolved for the NTP request, if it has one.
+// Never clears _resolvedIp: checkNow() owns clearing it, and an in-flight
+// request has no address to report yet.
+void TimeManager::takeResolvedIp()
+{
+  const char *addr = _sntp.remoteAddress();
+  if('\0' != addr[0]) {
+    strncpy(_resolvedIp, addr, sizeof(_resolvedIp) - 1);
+    _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
+  }
 }
 
 const char *TimeManager::getNtpStatus()
@@ -93,6 +135,38 @@ void TimeManager::setHost(const char *host)
   MicroTask.wakeTask(this);
 }
 
+void TimeManager::setDhcpServer(const char *ip)
+{
+  if(NULL == ip) {
+    ip = "";
+  }
+  if(0 == strcmp(ip, _dhcpHost)) {
+    return;
+  }
+  strncpy(_dhcpHost, ip, sizeof(_dhcpHost) - 1);
+  _dhcpHost[sizeof(_dhcpHost) - 1] = '\0';
+  DBUGF("NTP server from DHCP: %s", _dhcpHost[0] ? _dhcpHost : "(none)");
+  _dhcpFailedOver = false;
+  // A lease can change the server after boot; resync unless a fetch is
+  // already underway (that one finishes against the old host)
+  if(_sntpEnabled && !_fetchingTime) {
+    _nextCheckTime = millis() + 2000;
+    MicroTask.wakeTask(this);
+  }
+}
+
+void TimeManager::setDhcpEnabled(bool enabled)
+{
+  if(enabled != _dhcpEnabled)
+  {
+    _dhcpEnabled = enabled;
+    _dhcpFailedOver = false;
+    if(_sntpEnabled) {
+      checkNow();
+    }
+  }
+}
+
 bool TimeManager::setTimeZone(String tz)
 {
   const char *set_tz = tz.c_str();
@@ -120,7 +194,7 @@ bool TimeManager::setTimeZone(String tz)
 
   DBUGLN("Timezone set");
 // publish new time
- StaticJsonDocument<128> event;
+ JsonDocument event;
  serialise(event);
  event_send(event);
   return true;
@@ -130,32 +204,26 @@ void TimeManager::setup()
 {
   setTimeZone(time_zone);
 
-  _sntp.onError([this](uint8_t err) {
-    DBUGF("NTP error %u (attempt %u)", err, _retryCount + 1);
+  _sntp.onError([this](const char *err) {
+    DBUGF("NTP error %s (attempt %u)", err ? err : "unknown", _retryCount + 1);
     _fetchingTime = false;
     // Distinguish DNS failure from other NTP errors (firewall, bad server, etc.)
     // Only show "DNS failed" badge when DNS resolution itself fails.
-    if(_timeHost) {
-      struct addrinfo hints = {}, *res = nullptr;
-      hints.ai_family = AF_UNSPEC;
-      if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
-        void *addr = res->ai_family == AF_INET
-          ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-          : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-        inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
-        freeaddrinfo(res);
-      } else {
-        strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
-        _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
-      }
-    } else {
+    //
+    // Mongoose clears the peer address when a name does not resolve, so an
+    // empty one here says the failure was DNS. Resolving the name again to
+    // find that out would take the full retry path — A and AAAA,
+    // DNS_MAX_RETRIES against every configured server — and outlast the task
+    // watchdog on loopTask. Test the client's address directly rather than
+    // _resolvedIp: only checkNow() clears that, so on a scheduled retry it
+    // still holds the last good address and would mask a fresh DNS failure.
+    if('\0' == _sntp.remoteAddress()[0]) {
       strncpy(_resolvedIp, "failed", sizeof(_resolvedIp) - 1);
       _resolvedIp[sizeof(_resolvedIp) - 1] = '\0';
+    } else {
+      takeResolvedIp();
     }
-    unsigned long delay = retryDelay();
-    _retryCount++;
-    _nextCheckTime = millis() + delay;
-    MicroTask.wakeTask(this);
+    fetchFailed();
   });
 }
 
@@ -198,9 +266,14 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     {
       _setTheTime = false;
 
-      DBUGF("Setting the time on the EVSE, %s",
-        time_format_time(utc_time.tv_sec).c_str());
-      evse.getOpenEVSE().setTime(utc_time.tv_sec, [this](int ret)
+      DBUGF("Setting the time on the EVSE (UTC), %s",
+        time_format_time(utc_time.tv_sec, false).c_str());
+      // Use the tm& overload with UTC fields from gmtime_r so the EVSE/RTC
+      // stores UTC directly.  setTime(time_t) would call localtime_r()
+      // internally and store local time instead.
+      struct tm utc_tm;
+      gmtime_r(&utc_time.tv_sec, &utc_tm);
+      evse.getOpenEVSE().setTime(utc_tm, [this](int ret)
       {
         DBUGF("EVSE time %sset", RAPI_RESPONSE_OK == ret ? "" : "not ");
       });
@@ -223,30 +296,15 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
     if(elapsed >= SNTP_FETCH_TIMEOUT)
     {
       DBUGF("NTP fetch timed out after %lums", elapsed);
-      _fetchingTime = false;
-      unsigned long delay = retryDelay();
-      _retryCount++;
-      _nextCheckTime = millis() + delay;
+      fetchFailed();
       // fall through to the scheduling block below
     }
     else
     {
-      // Early DNS probe: populate _resolvedIp while the SNTP reply is still
-      // pending so the UI shows DNS status without waiting for the full cycle.
-      // Mongoose will have resolved the hostname before this fires (the UDP
-      // packet was already sent), so getaddrinfo() hits LwIP's DNS cache.
-      if(_resolvedIp[0] == '\0' && _timeHost) {
-        struct addrinfo hints = {}, *res = nullptr;
-        hints.ai_family = AF_UNSPEC;
-        if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
-          void *addr = res->ai_family == AF_INET
-            ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-            : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-          inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
-          freeaddrinfo(res);
-          DBUGF("NTP: early DNS probe → %s", _resolvedIp);
-        }
-      }
+      // Show the DNS status while the SNTP reply is still pending, without
+      // waiting for the full cycle: by now Mongoose has resolved the hostname
+      // and sent the request, so it knows the address.
+      takeResolvedIp();
       // Wake when the full watchdog deadline expires
       return (unsigned long)(SNTP_FETCH_TIMEOUT - elapsed);
     }
@@ -267,37 +325,31 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
       _fetchingTime  = true;
       _fetchStartTime = millis();
       _nextCheckTime = 0;
+      _activeHost = pickHost();
 
-      DBUGF("Trying to get time from %s", _timeHost);
-      bool started = _sntp.getTime(_timeHost, [this](struct timeval newTime)
+      DBUGF("Trying to get time from %s (%s)", _activeHost, _activeHost == _dhcpHost ? "DHCP" : "configured");
+      bool started = _sntp.getTime(_activeHost, [this](struct timeval newTime)
       {
-        setTime(newTime, _timeHost);
+        setTime(newTime, _activeHost);
 
         _fetchingTime  = false;
         _retryCount    = 0;
+        _dhcpFailedOver = false;           // next poll tries the DHCP server again
         _lastSyncTime  = newTime.tv_sec;   // use NTP ts directly
         _nextCheckTime = millis() + TIME_POLL_TIME;
-        // Resolve hostname → IP for status display (DNS is cached at this point)
-        if(_timeHost) {
-          struct addrinfo hints = {}, *res = nullptr;
-          hints.ai_family = AF_UNSPEC;
-          if(getaddrinfo(_timeHost, nullptr, &hints, &res) == 0 && res) {
-            void *addr = res->ai_family == AF_INET
-              ? (void *)&((struct sockaddr_in  *)res->ai_addr)->sin_addr
-              : (void *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr;
-            inet_ntop(res->ai_family, addr, _resolvedIp, sizeof(_resolvedIp) - 1);
-            freeaddrinfo(res);
-          }
-        }
+        // The address the reply actually came from, which is what the status
+        // display should show — a fresh lookup of a pool hostname can return
+        // a different server than the one that answered.
+        takeResolvedIp();
         MicroTask.wakeTask(this);
       });
 
       if(started)
       {
-        // Wake in 1 s for an early DNS probe while the SNTP request is
-        // in-flight.  By then Mongoose will have resolved the hostname and
-        // sent the UDP packet, so getaddrinfo() returns from LwIP's cache
-        // and we can show the DNS badge before the sync completes.
+        // Wake in 1 s to read back the resolved address while the SNTP
+        // request is in-flight.  By then Mongoose will have resolved the
+        // hostname and sent the UDP packet, so we can show the DNS badge
+        // before the sync completes.
         ret = 1000;
       }
       else
@@ -310,11 +362,8 @@ unsigned long TimeManager::loop(MicroTasks::WakeReason reason)
         // UI will show no DNS badge.  Increment _retryCount so status shows
         // "retry" rather than falsely maintaining "synchronized".
         DBUGLN("NTP: getTime() could not start (stale connection?), treating as failure");
-        _fetchingTime = false;
-        unsigned long delay = retryDelay();
-        _retryCount++;
-        _nextCheckTime = millis() + delay;
-        ret = delay;
+        fetchFailed();
+        ret = 0;
       }
     } else {
       ret = delay > 0 ? (unsigned long)delay : 0;
@@ -336,15 +385,19 @@ void TimeManager::setTime(struct timeval setTime, const char *source)
   DBUGF("Diff %.2f", diffTime(setTime, local_time));
   settimeofday(&setTime, &tz_utc);
 
-  // Set the time on the OpenEVSE, set from the local time as this could take several ms
+  // Set the time on the OpenEVSE if it differs from the current time
   evse.getOpenEVSE().getTime([this](int ret, time_t evse_time)
   {
     if(RAPI_RESPONSE_OK == ret)
     {
+      // The EVSE stores UTC but getTime() returns mktime(utc_fields_as_local).
+      // Use evse_time_to_utc() to recover the actual UTC epoch.
+      time_t evse_utc = evse_time_to_utc(evse_time);
+
       time_t local_time = time(NULL);
       DBUGF("Local time: %s", time_format_time(local_time).c_str());
-      DBUGF("Time from EVSE: %s", time_format_time(evse_time).c_str());
-      time_t diff = local_time - evse_time;
+      DBUGF("Time from EVSE (UTC): %s", time_format_time(evse_utc, false).c_str());
+      time_t diff = local_time - evse_utc;
       DBUGF("Diff %ld", diff);
 
       if(diff != 0)
@@ -360,7 +413,7 @@ void TimeManager::setTime(struct timeval setTime, const char *source)
   });
 
   // Event the time change
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   serialise(doc);
   event_send(doc);
 
@@ -388,6 +441,30 @@ void TimeManager::setSntpEnabled(bool enabled)
 
 void time_set_time(struct timeval setTime, const char *source) {
   timeManager.setTime(setTime, source);
+}
+
+time_t evse_time_to_utc(time_t evse_time)
+{
+  // The EVSE now stores UTC calendar fields, but getTime() reconstructs a
+  // time_t via mktime() which treats the stored UTC fields as local time,
+  // introducing a timezone offset error.
+  //
+  // To compensate: decompose evse_time into its UTC calendar fields with
+  // gmtime_r(), then ask mktime() what time_t those same fields produce when
+  // treated as local time.  The difference between evse_time and that result
+  // equals the timezone offset that mktime() already baked in.  Adding it
+  // back recovers the true UTC epoch:
+  //   evse_utc = evse_time + (evse_time - mktime(gmtime(evse_time)))
+  //            = 2*evse_time - mktime(gmtime(evse_time))
+  //
+  // Using evse_time as the reference point (rather than time(NULL)) keeps
+  // the DST determination self-consistent even on first boot before the
+  // system clock has been initialised.
+  struct tm gm;
+  gmtime_r(&evse_time, &gm);
+  // mktime() may normalise and modify the struct, so work on a copy.
+  struct tm gm_copy = gm;
+  return evse_time + (evse_time - mktime(&gm_copy));
 }
 
 String time_format_time(time_t time, bool local_time)

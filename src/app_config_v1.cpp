@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include "emonesp.h"
 #include "app_config.h"
 #include "time_man.h"
@@ -117,7 +118,7 @@ EEPROM_read_uint24(int start, uint32_t & val) {
 
   // Check the checksum
   byte c = EEPROM.read(start + 3);
-  DBUGF("Got '%06x'  %d == %d @ %d:4", newVal, c, checksum, start);
+  DBUGF("Got '%06" PRIx32 "'  %d == %d @ %d:4", newVal, c, checksum, start);
   if(c == checksum) {
     val = newVal;
   }

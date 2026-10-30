@@ -9,6 +9,7 @@
 #include "web_server.h"
 #include "lcd.h"
 #include "http_update.h"
+#include "ota_signing.h"
 
 
 static MongooseHttpServerResponseStream *upgradeResponse = NULL;
@@ -27,20 +28,45 @@ void handleUpdateFileUpload(MongooseHttpServerRequest *request)
     return;
   }
 
+  // A multipart Content-Length counts the boundaries too, so it is not the image
+  // size: a signed build would hash the signature trailer into the image and
+  // always fail. Signed builds take the raw body instead, where Content-Length
+  // is exact. Rejected here, before any part is read.
+  if(ota_signing_required() &&
+     request->headers("Content-Type").toString().indexOf("boundary=") >= 0) {
+    upgradeResponse->setCode(400);
+    upgradeResponse->print(F("Error: signed firmware must be POSTed as a raw body, not multipart"));
+    request->send(upgradeResponse);
+    upgradeResponse = NULL;
+    return;
+  }
+
   completedUpdateRequest = NULL;
 
   // TODO: Add support for returning 100: Continue
 }
 
-void handleUpdateFileFetch(MongooseHttpServerRequest *request)
-{
-  MongooseHttpServerResponseStream *response;
-  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
-    return;
-  }
+// POST /update with a JSON body ({"url": ...}) asks the device to download the
+// image itself. On Mongoose 7 every POST to an endpoint with an upload handler
+// is streamed through handleUpdateUpload(), JSON included, and request->body()
+// is never filled in -- so the JSON is collected there and handed to
+// startUrlUpdate() once it has all arrived. Without this the JSON was written
+// to flash as if it were the firmware image and failed at once (#1359).
+#define URL_UPDATE_MAX_BODY 1024
+static MongooseHttpServerRequest *urlUpdateRequest = NULL;
+static MongooseHttpServerResponseStream *urlUpdateResponse = NULL;
+static String urlUpdateBody;
 
-  String body = request->body().toString();
-  StaticJsonDocument<1024> doc;
+static bool isJsonRequest(MongooseHttpServerRequest *request)
+{
+  MongooseString contentType = request->headers("Content-Type");
+  return contentType.length() >= 16 &&
+    0 == strncasecmp(contentType.c_str(), "application/json", 16);
+}
+
+static void startUrlUpdate(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, const String &body)
+{
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, body);
   if(DeserializationError::Code::Ok == error)
   {
@@ -50,7 +76,7 @@ void handleUpdateFileFetch(MongooseHttpServerRequest *request)
       [](int) { },
       [](int errorCode) {
         DEBUG_PORT.printf("HTTP OTA failed: %d\n", errorCode);
-        StaticJsonDocument<128> event;
+        JsonDocument event;
         event["ota"] = "failed";
         event["ota_error"] = errorCode;
         web_server_event(event);
@@ -67,10 +93,65 @@ void handleUpdateFileFetch(MongooseHttpServerRequest *request)
   else
   {
     response->setCode(400);
-    response->printf("{\"msg\":\"%s\"", error.c_str());
+    response->printf("{\"msg\":\"%s\"}", error.c_str());
   }
 
   request->send(response);
+}
+
+void handleUpdateFileFetch(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  if(false == requestPreProcess(request, response, CONTENT_TYPE_JSON)) {
+    return;
+  }
+
+  if(request->isUpload())
+  {
+    // The body has not arrived yet; handleUpdateUpload() collects it.
+    if(NULL != urlUpdateRequest) {
+      response->setCode(409);
+      response->print(F("{\"msg\":\"busy\"}"));
+      request->send(response);
+      return;
+    }
+    urlUpdateRequest = request;
+    urlUpdateResponse = response;
+    urlUpdateBody = "";
+    return;
+  }
+
+  startUrlUpdate(request, response, request->body().toString());
+}
+
+static size_t handleUrlUpdateBody(MongooseHttpServerRequest *request, int ev, uint8_t *data, size_t len)
+{
+  if(NULL == urlUpdateResponse) {
+    return len;
+  }
+
+  if(len > 0)
+  {
+    if(urlUpdateBody.length() + len > URL_UPDATE_MAX_BODY)
+    {
+      urlUpdateResponse->setCode(413);
+      urlUpdateResponse->print(F("{\"msg\":\"too large\"}"));
+      request->send(urlUpdateResponse);
+      urlUpdateResponse = NULL;
+      return len;
+    }
+    urlUpdateBody.concat((const char *)data, len);
+  }
+
+  if(MG_EV_HTTP_PART_END == ev)
+  {
+    MongooseHttpServerResponseStream *response = urlUpdateResponse;
+    urlUpdateResponse = NULL;
+    startUrlUpdate(request, response, urlUpdateBody);
+    urlUpdateBody = "";
+  }
+
+  return len;
 }
 
 void handleUpdateRequest(MongooseHttpServerRequest *request)
@@ -86,7 +167,7 @@ void handleUpdateRequest(MongooseHttpServerRequest *request)
   }
   else if(HTTP_POST == request->method())
   {
-    if(request->isUpload()) {
+    if(request->isUpload() && !isJsonRequest(request)) {
       handleUpdateFileUpload(request);
     } else {
       handleUpdateFileFetch(request);
@@ -109,6 +190,10 @@ static void handleUpdateError(MongooseHttpServerRequest *request)
 
 size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseString filename, uint64_t index, uint8_t *data, size_t len)
 {
+  if(request == urlUpdateRequest) {
+    return handleUrlUpdateBody(request, ev, data, len);
+  }
+
   if(MG_EV_HTTP_PART_BEGIN == ev)
   {
 //    dumpRequest(request);
@@ -155,6 +240,16 @@ size_t handleUpdateUpload(MongooseHttpServerRequest *request, int ev, MongooseSt
 void handleUpdateClose(MongooseHttpServerRequest *request)
 {
   DBUGLN("Update close");
+
+  if(request == urlUpdateRequest) {
+    if(urlUpdateResponse) {
+      delete urlUpdateResponse;
+      urlUpdateResponse = NULL;
+    }
+    urlUpdateRequest = NULL;
+    urlUpdateBody = "";
+    return;
+  }
 
   if(upgradeResponse) {
     delete upgradeResponse;

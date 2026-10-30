@@ -1,6 +1,8 @@
 #include "diagnostics.h"
+#include "crash_unwind.h"
 
 #include <Arduino.h>
+#include <new>
 #include <MongooseCore.h>
 #include <MongooseHttpServer.h>
 
@@ -20,6 +22,22 @@
 #include <esp_idf_version.h>
 #include <esp_core_dump.h>
 #include <esp_partition.h>
+
+// heap_caps_walk() and its walker_*_t types arrived in IDF 5.3. This has to be
+// a nested test, not `DIAG_HAVE_IDF && ESP_IDF_VERSION >= ...`: the preprocessor
+// parses the whole #if expression even when the left side is 0, so on the host
+// build (no esp_idf_version.h) the undefined function-like ESP_IDF_VERSION_VAL
+// is a syntax error -- "missing binary operator before token (".
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
+#define DIAG_HAVE_HEAP_WALK 1
+#else
+#define DIAG_HAVE_HEAP_WALK 0
+#endif
+#if __has_include(<esp_memory_utils.h>)
+#include <esp_memory_utils.h>       // esp_ptr_executable, IDF 5
+#else
+#include <soc/soc_memory_layout.h>  // ... and its IDF 4.4 home
+#endif
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -61,6 +79,11 @@ typedef spi_flash_mmap_handle_t diag_mmap_handle_t;
 #ifndef DIAG_WS_SEND_LIMIT
 #define DIAG_WS_SEND_LIMIT 4096
 #endif
+
+// Internal DRAM only. On PSRAM boards MALLOC_CAP_8BIT alone answers with the
+// largest PSRAM block (megabytes), which hides the number that starves lwIP
+// and TLS: the largest *internal* block. Identical on boards without PSRAM.
+#define DIAG_HEAP_CAPS (MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
 
 // The transients worth catching are short. Sampling every 5s missed dips that
 // a request burst opens and closes well inside one interval, so sample often;
@@ -121,6 +144,14 @@ static const char *diagnostics_reset_reason_name(uint32_t reason)
     case ESP_RST_DEEPSLEEP:return "deepsleep";
     case ESP_RST_BROWNOUT: return "brownout";
     case ESP_RST_SDIO:     return "sdio";
+    // IDF 5.x additions (enum values, so guard by IDF version, not #ifdef).
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+    case ESP_RST_USB:      return "usb";        // reset over USB-Serial-JTAG (esptool)
+    case ESP_RST_JTAG:     return "jtag";
+    case ESP_RST_EFUSE:    return "efuse";
+    case ESP_RST_PWR_GLITCH: return "pwr_glitch";
+    case ESP_RST_CPU_LOCKUP: return "cpu_lockup";
+#endif
     default:               return "unknown";
   }
 }
@@ -142,7 +173,7 @@ void diagnostics_loop()
   diag_last_sample = now;
 
 #if DIAG_HAVE_IDF
-  uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(DIAG_HEAP_CAPS);
   if(largest < diag_largest_block_min) {
     diag_largest_block_min = largest;
   }
@@ -195,24 +226,24 @@ int diagnostics_ws_reap()
   }
 
   struct mg_connection *next = nullptr;
-  for(struct mg_connection *c = mg_next(mgr, nullptr); nullptr != c; c = next)
+  for(struct mg_connection *c = mgr->conns; nullptr != c; c = next)
   {
     // Take the next pointer before we flag this one for close, so that
     // dropping a connection cannot strand the walk.
-    next = mg_next(mgr, c);
+    next = c->next;
 
-    if(!(c->flags & MG_F_IS_WEBSOCKET)) {
+    if(!c->is_websocket) {
       continue;
     }
     conns++;
 
-    uint32_t pending = (uint32_t)c->send_mbuf.len;
+    uint32_t pending = (uint32_t)c->send.len;
     if(pending > diag_ws_send_max) {
       diag_ws_send_max = pending;
     }
 
     if(pending > DIAG_WS_SEND_LIMIT) {
-      c->flags |= MG_F_CLOSE_IMMEDIATELY;
+      c->is_closing = 1;
       diag_ws_reaped++;
       reaped++;
     }
@@ -225,7 +256,7 @@ int diagnostics_ws_reap()
 uint32_t diagnostics_probe_begin()
 {
 #if DIAG_HAVE_IDF
-  return (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  return (uint32_t)heap_caps_get_largest_free_block(DIAG_HEAP_CAPS);
 #else
   return 0;
 #endif
@@ -237,7 +268,7 @@ void diagnostics_probe_end(int slot, uint32_t start)
   if(slot < 0 || slot >= DIAG_PROBE_SLOTS) {
     return;
   }
-  uint32_t now = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  uint32_t now = (uint32_t)heap_caps_get_largest_free_block(DIAG_HEAP_CAPS);
   diag_probe_hits[slot]++;
   if(now < start) {
     uint32_t drop = start - now;
@@ -254,7 +285,7 @@ void diagnostics_status(JsonDocument &doc)
   // Fold this reading into the minimum as well. /status is itself one of the
   // heavier allocations, so a sample taken here is a sample taken under load —
   // exactly the moment the periodic sampler is least likely to have caught.
-  uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  uint32_t largest = (uint32_t)heap_caps_get_largest_free_block(DIAG_HEAP_CAPS);
   if(largest < diag_largest_block_min) {
     diag_largest_block_min = largest;
   }
@@ -262,6 +293,13 @@ void diagnostics_status(JsonDocument &doc)
   doc["heap_largest"] = largest;
   doc["heap_largest_min"] = UINT32_MAX == diag_largest_block_min ? 0 : diag_largest_block_min;
   doc["heap_min"] = (uint32_t)esp_get_minimum_free_heap_size();
+  // PSRAM, only on boards that have it, so /status is unchanged elsewhere. The
+  // internal figures above deliberately exclude it; these show what the SDK is
+  // routing into external RAM.
+  if(heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0) {
+    doc["psram_free"] = (uint32_t)heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    doc["psram_largest"] = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+  }
   doc["reset_reason"] = diag_reset_reason;
   doc["reset_reason_name"] = diagnostics_reset_reason_name(diag_reset_reason);
   doc["stack_loop_min"] = UINT32_MAX == diag_stack_loop_min ? 0 : diag_stack_loop_min;
@@ -288,6 +326,48 @@ void diagnostics_status(JsonDocument &doc)
 #endif
 }
 
+#if DIAG_COREDUMP_SUMMARY && !defined(__riscv)
+static bool diag_pc_executable(uint32_t pc)
+{
+  return esp_ptr_executable((void *)pc);
+}
+
+// The ELF inside the stored image. The image starts with the IDF's
+// core_dump_header_t, whose size has changed between IDF versions, so find
+// the ELF by its magic rather than by sizeof.
+static bool diag_coredump_elf(const uint8_t **elf, size_t *elfLen)
+{
+  const uint8_t *img;
+  size_t len;
+  if(!diagnostics_coredump_image(&img, &len)) {
+    return false;
+  }
+  for(size_t off = 0; off <= 64 && off + 4 <= len; off += 4) {
+    if(0 == memcmp(img + off, "\x7f" "ELF", 4)) {
+      *elf = img + off;
+      *elfLen = len - off;
+      return true;
+    }
+  }
+  return false;
+}
+
+// Walk one task's stack out of the stored image.
+static size_t diag_coredump_deep_bt(uint32_t tcb, uint32_t *out, size_t max,
+                                    bool *corrupted)
+{
+  const uint8_t *elf, *stack;
+  size_t len;
+  uint32_t vaddr, size;
+  if(!diag_coredump_elf(&elf, &len) ||
+     !crash_unwind_find_stack(elf, len, tcb, &stack, &vaddr, &size)) {
+    return 0;
+  }
+  return crash_unwind_xtensa(stack, vaddr, size, diag_pc_executable, out, max,
+                             corrupted);
+}
+#endif
+
 void diagnostics_coredump_json(JsonDocument &doc)
 {
 #if DIAG_HAVE_IDF
@@ -313,7 +393,8 @@ void diagnostics_coredump_json(JsonDocument &doc)
 #if DIAG_COREDUMP_SUMMARY
 #if DIAG_COREDUMP_PANIC_REASON
   char reason[128];
-  if(ESP_OK == esp_core_dump_get_panic_reason(reason, sizeof(reason))) {
+  bool haveReason = (ESP_OK == esp_core_dump_get_panic_reason(reason, sizeof(reason)));
+  if(haveReason) {
     doc["panic_reason"] = reason;
   }
 #endif
@@ -368,12 +449,61 @@ void diagnostics_coredump_json(JsonDocument &doc)
     // image from /debug/crash/raw still carries the stack dump.
     doc["bt"] = "riscv-no-unwind";
 #else
-    JsonArray bt = doc.createNestedArray("bt");
-    for(uint32_t i = 0; i < s->exc_bt_info.depth && i < 16; i++) {
-      snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_bt_info.bt[i]);
-      bt.add(buf);
+    // The IDF's walk, carried on past its 16 frames. Used only when it
+    // agrees with the IDF's frame for frame and goes further; anything else
+    // falls back to the IDF's own list.
+    uint32_t *deep = (uint32_t *)malloc(DIAG_COREDUMP_BT_MAX * sizeof(uint32_t));
+    bool deepCorrupted = true;
+    size_t depth = deep ? diag_coredump_deep_bt(s->exc_tcb, deep, DIAG_COREDUMP_BT_MAX,
+                                                &deepCorrupted) : 0;
+    const uint32_t idfCap = sizeof(s->exc_bt_info.bt) / sizeof(s->exc_bt_info.bt[0]);
+    bool useDeep = crash_unwind_extends(deep, depth, s->exc_bt_info.bt,
+                                        s->exc_bt_info.depth, idfCap);
+
+    JsonArray bt = doc["bt"].to<JsonArray>();
+    if(useDeep) {
+      for(size_t i = 0; i < depth; i++) {
+        snprintf(buf, sizeof(buf), "0x%08x", (unsigned)deep[i]);
+        bt.add(buf);
+      }
+      doc["bt_corrupted"] = deepCorrupted;
+    } else {
+      for(uint32_t i = 0; i < s->exc_bt_info.depth && i < 16; i++) {
+        snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_bt_info.bt[i]);
+        bt.add(buf);
+      }
+      doc["bt_corrupted"] = s->exc_bt_info.corrupted;
     }
-    doc["bt_corrupted"] = s->exc_bt_info.corrupted;
+
+#if DIAG_COREDUMP_PANIC_REASON
+    // A task watchdog panics in whatever task its interrupt lands on. With
+    // the starved task blocked rather than spinning that is an idle task,
+    // and `bt` above is four frames of it waiting for an interrupt. The
+    // starved task's stack is in the same image: walk that too.
+    char wdtTask[configMAX_TASK_NAME_LEN];
+    uint32_t wdtTcb;
+    const uint8_t *elf;
+    size_t elfLen;
+    if(deep && haveReason &&
+       crash_unwind_wdt_task(reason, s->exc_task, wdtTask, sizeof(wdtTask)) &&
+       diag_coredump_elf(&elf, &elfLen) &&
+       crash_unwind_find_tcb(elf, elfLen, s->exc_tcb, s->exc_task, wdtTask, &wdtTcb))
+    {
+      bool wdtCorrupted = true;
+      size_t wdtDepth = diag_coredump_deep_bt(wdtTcb, deep, DIAG_COREDUMP_BT_MAX,
+                                              &wdtCorrupted);
+      if(wdtDepth > 0) {
+        doc["wdt_task"] = wdtTask;   // a local buffer: copied, never pointed to
+        JsonArray wbt = doc["wdt_bt"].to<JsonArray>();
+        for(size_t i = 0; i < wdtDepth; i++) {
+          snprintf(buf, sizeof(buf), "0x%08x", (unsigned)deep[i]);
+          wbt.add(buf);
+        }
+        doc["wdt_bt_corrupted"] = wdtCorrupted;
+      }
+    }
+#endif
+    free(deep);
 #endif
   }
   else
@@ -441,3 +571,96 @@ bool diagnostics_coredump_erase()
   return false;
 #endif
 }
+
+
+// ---------------------------------------------------------------------------
+// Internal-heap layout report
+// ---------------------------------------------------------------------------
+// Needs heap_caps_walk() (IDF 5.3+). The default [env] still builds against
+// core 2.x / IDF 4.4 and the host build has no IDF at all; the "n/a" fallback
+// below covers both.
+#if DIAG_HAVE_HEAP_WALK
+namespace {
+struct HeapMapBlock { uintptr_t ptr; size_t size; };
+struct HeapMapState {
+  size_t live_n = 0, live_b = 0, free_n = 0, free_b = 0;
+  uint16_t hist_live[24] = {0};
+  uint16_t hist_free[24] = {0};
+  HeapMapBlock top_live[12] = {};
+  HeapMapBlock top_free[8] = {};
+  uintptr_t region_start = 0, region_end = 0;
+  int regions = 0;
+};
+
+static void heapmap_insert(HeapMapBlock *arr, size_t n, uintptr_t ptr, size_t size)
+{
+  for(size_t i = 0; i < n; i++) {
+    if(size > arr[i].size) {
+      for(size_t j = n - 1; j > i; j--) arr[j] = arr[j - 1];
+      arr[i] = { ptr, size };
+      return;
+    }
+  }
+}
+
+static bool heapmap_walker(walker_heap_into_t heap, walker_block_info_t b, void *user)
+{
+  HeapMapState *st = (HeapMapState *)user;
+  if(heap.start != (intptr_t)st->region_start) {
+    st->regions++;
+    st->region_start = heap.start;
+    st->region_end = heap.end;
+  }
+  int bucket = 0;
+  for(size_t v = b.size; v > 1 && bucket < 23; v >>= 1) bucket++;
+  if(b.used) {
+    st->live_n++; st->live_b += b.size; st->hist_live[bucket]++;
+    heapmap_insert(st->top_live, 12, (uintptr_t)b.ptr, b.size);
+  } else {
+    st->free_n++; st->free_b += b.size; st->hist_free[bucket]++;
+    heapmap_insert(st->top_free, 8, (uintptr_t)b.ptr, b.size);
+  }
+  return true;
+}
+} // namespace
+
+void diagnostics_heapmap(String &out)
+{
+  HeapMapState *st = new (std::nothrow) HeapMapState();   // ~500 B; keep it off the stack
+  if(st == nullptr) {
+    out += "heap map: no memory for the walk state\n";
+    return;
+  }
+  heap_caps_walk(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, heapmap_walker, st);
+
+  char line[96];
+  out.reserve(2048);
+  snprintf(line, sizeof(line), "internal heap: %d region(s), live %u blocks / %u B, free %u blocks / %u B\n",
+           st->regions, (unsigned)st->live_n, (unsigned)st->live_b, (unsigned)st->free_n, (unsigned)st->free_b);
+  out += line;
+  snprintf(line, sizeof(line), "largest free block: %u B (min since boot %u B)\n",
+           (unsigned)heap_caps_get_largest_free_block(DIAG_HEAP_CAPS),
+           (unsigned)(UINT32_MAX == diag_largest_block_min ? 0 : diag_largest_block_min));
+  out += line;
+
+  out += "\nlargest live blocks:\n";
+  for(int i = 0; i < 12 && st->top_live[i].size; i++) {
+    snprintf(line, sizeof(line), "  %08x  %6u B\n", (unsigned)st->top_live[i].ptr, (unsigned)st->top_live[i].size);
+    out += line;
+  }
+  out += "\nlargest free gaps:\n";
+  for(int i = 0; i < 8 && st->top_free[i].size; i++) {
+    snprintf(line, sizeof(line), "  %08x  %6u B\n", (unsigned)st->top_free[i].ptr, (unsigned)st->top_free[i].size);
+    out += line;
+  }
+  out += "\nsize histogram (log2 bucket: live / free):\n";
+  for(int i = 3; i < 24; i++) {
+    if(0 == st->hist_live[i] && 0 == st->hist_free[i]) continue;
+    snprintf(line, sizeof(line), "  >=%7u B: %4u / %4u\n", 1u << i, st->hist_live[i], st->hist_free[i]);
+    out += line;
+  }
+  delete st;
+}
+#else
+void diagnostics_heapmap(String &out) { out += "n/a\n"; }
+#endif

@@ -107,6 +107,14 @@ extern uint32_t divert_attack_smoothing_time;
 extern uint32_t divert_decay_smoothing_time;
 extern uint32_t divert_min_charge_time;
 
+// Shelly LNM settings (local grid power / voltage source)
+extern bool shelly_lnm_enabled;
+extern String shelly_lnm_addr;
+extern uint16_t shelly_lnm_port;
+extern String shelly_lnm_power_field;
+extern String shelly_lnm_voltage_field;
+extern String shelly_lnm_device;
+
 // Scheduler settings
 extern uint32_t scheduler_start_window;
 
@@ -123,9 +131,13 @@ extern uint32_t loadsharing_config_version;
 extern uint32_t loadsharing_config_updated_at;
 extern uint32_t loadsharing_peers_version;
 extern uint32_t loadsharing_status_version;
-extern String loadsharing_role;
+extern bool loadsharing_role;  // false = controller (default), true = member
 extern String loadsharing_controller_host;
 extern uint32_t loadsharing_rotation_interval;
+
+// Advisory acknowledgements (internal state, not a /config setting)
+extern String notification_acks;
+extern String notification_acks_fw;
 
 //Shaper settings
 extern uint32_t current_shaper_max_pwr;
@@ -159,8 +171,19 @@ enum vehicle_data_src {
 // 24-bits of Flags
 extern uint32_t flags;
 
+// HTTPS listener toggle, stored outside flags
+extern bool www_https_enabled;
+
+// Second word of flags: `flags` above is full (every bit spoken for, see the
+// retired-bit note at CONFIG_SERVICE_SNTP), so new on/off settings go here.
+extern uint32_t flags2;
+
 #define CONFIG_SERVICE_EMONCMS      (1 << 0)
 #define CONFIG_SERVICE_MQTT         (1 << 1)
+// Bit 2 was CONFIG_SERVICE_OHM (OhmConnect), removed in #1186. Leave it
+// retired rather than reuse it: devices that had Ohm enabled still carry
+// that bit set in their stored `flags`, and repurposing it would make
+// their upgrade silently flip on whatever moves in.
 #define CONFIG_SERVICE_SNTP         (1 << 3)
 #define CONFIG_MQTT_PROTOCOL        (7 << 4) // Maybe leave a bit of space after for additional protocols
 #define CONFIG_MQTT_ALLOW_ANY_CERT  (1 << 7)
@@ -187,7 +210,24 @@ extern uint32_t flags;
 // installs have this bit clear, so they keep probing exactly as before.
 #define CONFIG_MQTT_NO_SYS_QUERY    (1 << 29)
 // TFT panel clock in 12-hour form. Clear (the default) keeps the 24-hour clock.
-#define CONFIG_TFT_12H_CLOCK        (1 << 30) // next free bit after CONFIG_TFT_12H_CLOCK
+#define CONFIG_TFT_12H_CLOCK        (1 << 30)
+// HTTP listener control. HTTPS is a plain bool (www_https_enabled) because
+// bit 31 below took the last free flag bit.
+//
+// Bit 2 is reclaimed from CONFIG_SERVICE_OHM, removed in a93fa8f2. An install
+// that had OhmConnect enabled therefore comes up with this bit set, which reads
+// as "HTTP enabled" -- the default anyway, so nothing changes for them.
+#define CONFIG_HTTP_ENABLED         (1UL << 2)
+// Inverted sense: bit SET ignores the NTP server offered by DHCP (option 42)
+// and always uses sntp_hostname. Clear - the default, and what every existing
+// install already has stored - prefers the DHCP one. Last free bit.
+#define CONFIG_SNTP_NO_DHCP         (1u << 31)
+
+// flags2: a second flags word for new on/off settings now that `flags` above
+// is full.
+// Web UI: reveal OpenEVSE Labs (in-development) features. Stored on the
+// device so it applies to every browser.
+#define CONFIG2_LABS_ENABLED        (1 << 0)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -197,6 +237,14 @@ inline bool config_emoncms_enabled() {
 
 inline bool config_mqtt_enabled() {
   return CONFIG_SERVICE_MQTT == (flags & CONFIG_SERVICE_MQTT);
+}
+
+inline bool config_http_enabled() {
+  return CONFIG_HTTP_ENABLED == (flags & CONFIG_HTTP_ENABLED);
+}
+
+inline bool config_https_enabled() {
+  return www_https_enabled;
 }
 
 inline bool config_sntp_enabled() {
@@ -214,6 +262,10 @@ inline bool config_mqtt_retained() {
 // Query broker metadata via $SYS/broker/version. Must be off for managed
 // brokers (AWS IoT Core): they have no $SYS tree and answer an unauthorised
 // subscribe by closing the connection rather than failing the SUBACK.
+inline bool config_sntp_dhcp() {
+  return 0 == (flags & CONFIG_SNTP_NO_DHCP);
+}
+
 inline bool config_mqtt_sys_query() {
   return 0 == (flags & CONFIG_MQTT_NO_SYS_QUERY);
 }
@@ -266,6 +318,10 @@ inline bool config_rfid_enabled() {
   return CONFIG_RFID == (flags & CONFIG_RFID);
 }
 
+inline bool config_labs_enabled() {
+  return CONFIG2_LABS_ENABLED == (flags2 & CONFIG2_LABS_ENABLED);
+}
+
 inline bool config_factory_write_lock() {
   return CONFIG_FACTORY_WRITE_LOCK == (flags & CONFIG_FACTORY_WRITE_LOCK);
 }
@@ -299,8 +355,6 @@ inline bool config_tft_12h_clock()
   return CONFIG_TFT_12H_CLOCK == (flags & CONFIG_TFT_12H_CLOCK);
 }
 
-bool config_https_enabled();
-
 extern uint32_t config_version();
 
 // -------------------------------------------------------------------
@@ -329,12 +383,21 @@ bool config_set_opt_string(const char *name, const char *value);
 // Read config settings from JSON object
 bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
-bool config_deserialize(DynamicJsonDocument &doc);
+bool config_deserialize(JsonDocument &doc);
 void config_commit(bool factory = false);
 void config_user_commit();  // persist user config without touching factory_write_lock
+// Persist notification_acks / notification_acks_fw. Writing those globals and
+// calling commit() is not enough - see the definition.
+void config_save_notification_acks(const String &acks, const String &fw);
+
+// Installer-tools password. Never serialised or accepted through the public
+// config paths; the web server's /installer/* handlers are the only users.
+#define INSTALLER_PASSWORD_DEFAULT "installer"
+const String &config_installer_password();
+bool config_installer_password_set(const char *password);
 
 // Write config settings to JSON object
 bool config_serialize(String& json, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
-bool config_serialize(DynamicJsonDocument &doc, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
+bool config_serialize(JsonDocument &doc, bool longNames = true, bool compactOutput = false, bool hideSecrets = false);
 
 #endif // _EMONESP_CONFIG_H

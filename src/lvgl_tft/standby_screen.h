@@ -32,6 +32,11 @@ struct StandbyScreenData {
   const char *clock;          // "YYYY-MM-DD  HH:MM" (matches the charge header)
   const char *hostname;       // top strip, second line
   const char *ip;             // top strip, second line
+  // Advisory state (notifications.h). notify_active drives the amber
+  // perimeter border. notify_line REPLACES the hostname/ip line while it is
+  // set: a warning outranks knowing where to point a browser.
+  bool     notify_active;
+  const char *notify_line;    // "" when there is nothing to say
 };
 
 void standby_screen_build();

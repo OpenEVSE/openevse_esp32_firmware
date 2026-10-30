@@ -62,6 +62,12 @@ struct ChargeScreenData {
                               // so the address isn't left nowhere at all.
   const char *msg_line;       // transient message (boot/OTA/status); "" when none
                               // — owns the top strip's second line
+  // Advisory state (notifications.h). notify_active drives the amber
+  // perimeter border; notify_line is the worst advisory's short text, with a
+  // "+N" suffix when there are more. A transient msg_line outranks it: OTA
+  // progress is time-critical where an advisory is not.
+  bool     notify_active;
+  const char *notify_line;    // "" when there is nothing to say
 };
 
 // Build + load the charge screen (own LVGL screen object).

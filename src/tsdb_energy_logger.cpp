@@ -4,6 +4,7 @@
 #include "esp_tsdb.h"
 #include "energy_logger.h"   // MonthlyMetrics, AnnualMetrics, serialize/deserialize
 #include "debug.h"
+#include "fs_usage.h"
 #include <LittleFS.h>
 #include <time.h>
 
@@ -59,10 +60,57 @@ bool TsdbEnergyLogger::init_db() {
   return true;
 }
 
+// The writer shares core 1 with loopTask at the same priority, so a long
+// compaction time-slices against the main loop instead of stalling it. It must
+// not sit on core 0: the task watchdog also watches idle0, and a multi-second
+// write there would trip it just the same.
+#define TSDB_WRITER_STACK   6144
+#define TSDB_WRITER_QUEUE   4
+#define TSDB_USAGE_REFRESH_MS 30000   // same age limit as LFS_USAGE_MAX_AGE_MS
+
+bool TsdbEnergyLogger::start_writer() {
+  _jobs = xQueueCreate(TSDB_WRITER_QUEUE, sizeof(TsdbWriteJob));
+  if (_jobs == nullptr) return false;
+  TaskHandle_t h = nullptr;
+  // First sample here, before the writer exists to hold the lock, so a request
+  // never finds the cache empty and reads LittleFS from loopTask itself.
+  littlefs_usage.refresh(millis());
+  if (xTaskCreatePinnedToCore(writer_task, "tsdb_writer", TSDB_WRITER_STACK, this,
+                              1, &h, APP_CPU_NUM) != pdPASS) {
+    vQueueDelete(_jobs);
+    _jobs = nullptr;
+    return false;
+  }
+  // This task holds the FS lock for the length of each write, so it keeps the
+  // /status and /config usage numbers fresh and loopTask never waits on it.
+  littlefs_usage.setBackgroundSampler();
+  return true;
+}
+
+void TsdbEnergyLogger::writer_task(void *arg) {
+  TsdbEnergyLogger *self = static_cast<TsdbEnergyLogger *>(arg);
+  TsdbWriteJob job;
+  for (;;) {
+    // Wake at least every TSDB_USAGE_REFRESH_MS even with no jobs: until the
+    // clock is set there are none, and other subsystems write LittleFS too.
+    if (xQueueReceive(self->_jobs, &job, pdMS_TO_TICKS(TSDB_USAGE_REFRESH_MS)) != pdTRUE) {
+      littlefs_usage.refresh(millis());
+      continue;
+    }
+    if (job.rollup) self->rollup_yesterday();
+    esp_err_t e = tsdb_write(job.ts, job.row);
+    if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);
+    littlefs_usage.refresh(millis());
+  }
+}
+
 void TsdbEnergyLogger::begin(EvseManager &evse) { _evse = &evse; MicroTask.startTask(this); }
 
 void TsdbEnergyLogger::setup() {
-  _ready = init_db();
+  _ready = init_db() && start_writer();
+  if (!_ready && _init_err == 0) {
+    DEBUG_PORT.println("[tsdb] writer task failed: energy history disabled");
+  }
   _last_session_wh = _evse ? _evse->getSessionEnergy() : 0;
 
   // Seed rollover tracker to TODAY so the first real rollup fires at the next
@@ -87,11 +135,6 @@ void TsdbEnergyLogger::setup() {
 //   d1 = d0 + 86400 - 1  (inclusive, avoids boundary double-counting)
 // ---------------------------------------------------------------------------
 
-// JSON capacities (≤12 months/yr, small number of years)
-#define TSDB_MONTHLY_JSON_CAP \
-  (JSON_ARRAY_SIZE(13) + 13 * JSON_OBJECT_SIZE(4) + 13 * 12)
-#define TSDB_ANNUAL_JSON_CAP \
-  (JSON_ARRAY_SIZE(50) + 50 * JSON_OBJECT_SIZE(4))
 
 void TsdbEnergyLogger::rollup_yesterday() {
   time_t now = time(NULL);
@@ -156,7 +199,7 @@ void TsdbEnergyLogger::rollup_yesterday() {
   snprintf(month_key, sizeof(month_key), "%04d-%02d", yday_year, yday_month);
 
   {
-    DynamicJsonDocument mdoc(TSDB_MONTHLY_JSON_CAP);
+    JsonDocument mdoc;
     JsonArray marr = mdoc.to<JsonArray>();
 
     File mf = LittleFS.open(monthly_path, "r");
@@ -173,7 +216,7 @@ void TsdbEnergyLogger::rollup_yesterday() {
       if (strcmp(mo, month_key) == 0) { found = item; break; }
     }
     if (found.isNull()) {
-      found = marr.createNestedObject();
+      found = marr.add<JsonObject>();
       found["mo"] = (char *)month_key;
       found["pk"] = peak_c;
       found["mn"] = min_c;
@@ -205,7 +248,7 @@ void TsdbEnergyLogger::rollup_yesterday() {
 
   // ---- Update annual rollup file (/logs/annual.json) ----
   {
-    DynamicJsonDocument adoc(TSDB_ANNUAL_JSON_CAP);
+    JsonDocument adoc;
     JsonArray aarr = adoc.to<JsonArray>();
 
     File af = LittleFS.open(ENERGY_LOGGER_ANNUAL_FILE, "r");
@@ -221,7 +264,7 @@ void TsdbEnergyLogger::rollup_yesterday() {
       if ((int)(item["yr"] | 0) == yday_year) { found = item; break; }
     }
     if (found.isNull()) {
-      found = aarr.createNestedObject();
+      found = aarr.add<JsonObject>();
       found["yr"] = yday_year;
       found["pk"] = peak_c;
       found["mn"] = min_c;
@@ -281,7 +324,7 @@ unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
         _last_rolled_year = now_tm.tm_year;
       } else if (now_tm.tm_yday  != _last_rolled_yday ||
                  now_tm.tm_year  != _last_rolled_year) {
-        rollup_yesterday();
+        _rollup_pending = true;   // done by the writer, ahead of the next sample it accepts
         _last_rolled_yday = now_tm.tm_yday;
         _last_rolled_year = now_tm.tm_year;
       }
@@ -305,10 +348,19 @@ unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
         s.pilot_a = _evse->getChargeCurrent();
       }
 
-      int16_t row[TSDB_NUM_COLS];
-      tsdb_scale_sample(s, row);
-      esp_err_t e = tsdb_write((uint32_t)now, row);
-      if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);
+      TsdbWriteJob job;
+      job.ts = (uint32_t)now;
+      tsdb_scale_sample(s, job.row);
+      job.rollup = _rollup_pending;
+      // Never block here: if the writer is still inside a slow flash operation
+      // the sample is dropped, which costs one point of history, not a reboot.
+      // A pending rollup stays pending until a job carrying it is accepted.
+      if (xQueueSend(_jobs, &job, 0) == pdTRUE) {
+        _rollup_pending = false;
+      } else {
+        _dropped++;
+        DBUGF("tsdb sample dropped, writer busy (%lu total)", (unsigned long)_dropped);
+      }
     }
   }
   return next_ms;

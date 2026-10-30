@@ -11,6 +11,12 @@
 #define SNTP_FETCH_TIMEOUT (30 * 1000UL)
 #endif
 
+// Consecutive failures against the DHCP-supplied server before falling back to
+// the configured host for the rest of the poll cycle
+#ifndef SNTP_DHCP_FALLBACK_AFTER
+#define SNTP_DHCP_FALLBACK_AFTER 2
+#endif
+
 class TimeManager : public MicroTasks::Task
 {
   private:
@@ -26,7 +32,21 @@ class TimeManager : public MicroTasks::Task
     char   _resolvedIp[46];         // last resolved IP, "failed", or ""
     bool   _syncRequested;          // set by checkNow(); shows "connecting" before fetch starts
 
+    // Mongoose resolves the NTP host to send the request, so the address is
+    // read back from the client rather than looked up again here.
+    void takeResolvedIp();
+
+    // NTP server learnt from DHCP (option 42), preferred over _timeHost while
+    // sntp_dhcp is on. If it stops answering we fall back to the configured
+    // host until the next scheduled poll, which tries DHCP again.
+    char   _dhcpHost[16];           // dotted IPv4, "" when DHCP offered none
+    bool   _dhcpEnabled;            // config sntp_dhcp
+    bool   _dhcpFailedOver;         // DHCP server unresponsive this cycle
+    const char *_activeHost;        // host the in-flight / last fetch targeted
+
     unsigned long retryDelay();     // exponential back-off based on _retryCount
+    const char *pickHost();         // DHCP server if usable, else _timeHost
+    void fetchFailed();             // shared failure path: back off or fall back
 
     class TimeChange : public MicroTasks::Event
     {
@@ -48,6 +68,8 @@ class TimeManager : public MicroTasks::Task
     void begin();
 
     void setHost(const char *host);
+    void setDhcpServer(const char *ip);   // NULL or "" clears
+    void setDhcpEnabled(bool enabled);
     void setTime(struct timeval setTime, const char *source);
     bool setTimeZone(String tz);
 
@@ -60,6 +82,7 @@ class TimeManager : public MicroTasks::Task
     void checkNow() {
       _fetchingTime  = false;
       _retryCount    = 0;
+      _dhcpFailedOver = false;        // a fresh start tries the DHCP server first again
       _syncRequested = true;          // show "connecting" immediately in the UI
       _resolvedIp[0] = '\0';          // drop stale DNS badge
       _nextCheckTime = millis();
@@ -71,6 +94,10 @@ class TimeManager : public MicroTasks::Task
     time_t      getLastSyncTime()  { return _lastSyncTime; }
     int32_t     getNextSyncMs();
     const char *getResolvedIp()    { return _resolvedIp; }
+    const char *getDhcpServer()    { return _dhcpHost; }
+    // Host the next/current fetch goes to, and whether that is the DHCP one
+    const char *getActiveHost()    { return pickHost(); }
+    bool        isUsingDhcpServer() { return pickHost() == _dhcpHost; }
 
     // Register for events
     void onTimeChange(MicroTasks::EventListener *listner) {
@@ -83,6 +110,17 @@ class TimeManager : public MicroTasks::Task
 extern TimeManager timeManager;
 
 extern void time_set_time(struct timeval set_time, const char *source);
+
+// Convert the raw time_t returned by OpenEVSE.getTime() to the actual UTC epoch.
+//
+// The EVSE stores time as UTC calendar fields (year/month/day/hour/min/sec).
+// However the library's getTime() reconstructs a time_t by calling mktime(),
+// which treats those fields as *local* time, introducing a timezone offset error.
+// This function undoes that offset so callers always work with true UTC.
+//
+// The compensation is computed using only evse_time itself as the reference,
+// so it is self-consistent even on first boot before the WiFi clock is set.
+extern time_t evse_time_to_utc(time_t evse_time);
 
 extern String time_format_time(time_t time, bool local_time = true);
 extern String time_format_time(tm &time);

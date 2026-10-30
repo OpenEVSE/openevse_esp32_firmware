@@ -11,12 +11,17 @@
 // Requires `needed` bytes plus an 8 KB safety margin (LittleFS also needs free
 // blocks for its own metadata/garbage collection, especially on the small 4 MB
 // 128 KB partition).
-static inline bool littlefs_has_space(size_t needed)
+// Free bytes, clamped at 0. Two full filesystem traversals: expensive.
+static inline size_t littlefs_free_bytes()
 {
   size_t total = LittleFS.totalBytes();
   size_t used  = LittleFS.usedBytes();
-  size_t freeb = total > used ? total - used : 0;
-  return freeb >= needed + 8192;
+  return total > used ? total - used : 0;
+}
+
+static inline bool littlefs_has_space(size_t needed)
+{
+  return littlefs_free_bytes() >= needed + 8192;
 }
 
 #endif // _FS_UTIL_H

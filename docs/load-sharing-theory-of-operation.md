@@ -96,7 +96,7 @@ Configuration is stored via `ConfigJson` and exposed on the `/config` endpoint.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `loadsharing_enabled` | bool | `false` | Master enable. |
-| `loadsharing_role` | string | `""` | `""`, `"controller"`, or `"member"`. |
+| `loadsharing_role` | bool | `false` | `false` = controller (default, no manual selection needed), `true` = member. |
 | `loadsharing_controller_host` | string | `""` | Member only: hostname of the controller. |
 | `loadsharing_group_id` | string | `""` | User-defined group identifier. |
 | `loadsharing_group_max_current` | double | `0` | Total circuit limit (amps). |
@@ -112,7 +112,7 @@ Configuration is stored via `ConfigJson` and exposed on the `/config` endpoint.
 > list in `/loadsharing_peers.json` (the controller's own row included). Lower
 > value = higher priority.
 
-> **Invariant**: On a member device (`loadsharing_role == "member"`), load
+> **Invariant**: On a member device (`loadsharing_role == true`), load
 > sharing configuration fields MUST be read-only.  POST/DELETE to
 > `/loadsharing/peers` MUST return HTTP 403.
 >
@@ -208,12 +208,12 @@ stateDiagram-v2
 
 - After a peer reaches `WS_CONNECTED` for the first time, the controller sends
   `POST http://{member}/config` with all group-level load sharing config fields
-  plus `loadsharing_role: "member"` and `loadsharing_controller_host: {self}`.
+  plus `loadsharing_role: true` and `loadsharing_controller_host: {self}`.
 - `pushConfigToAllPeers()` sets a `_configPushPending` flag; on the next loop
   iteration, all connected peers have their `configPushed` flag cleared and
   config is re-sent.
 - On peer removal (`DELETE /loadsharing/peers/{host}`), a reset config is
-  pushed: `{loadsharing_enabled: false, loadsharing_role: ""}`.
+  pushed: `{loadsharing_enabled: false, loadsharing_role: false}`.
 
 ### 4.5  Reciprocal Peer Sync
 
@@ -674,7 +674,7 @@ the basis for test assertions.
 ### 10.6  Config Consistency
 
 > **INV-7**: Member devices MUST reject local writes to load sharing config
-> fields when `loadsharing_role == "member"`.
+> fields when `loadsharing_role == true`.
 
 ### 10.7  Reciprocal Sync
 

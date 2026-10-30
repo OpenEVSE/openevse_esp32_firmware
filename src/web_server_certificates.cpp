@@ -7,8 +7,12 @@
 typedef const __FlashStringHelper *fstr_t;
 
 #include "emonesp.h"
+#include "certificate_id.h"
 #include "web_server.h"
 #include "certificates.h"
+#include "self_signed_cert.h"
+#include "app_config.h"
+#include "net_manager.h"
 
 // -------------------------------------------------------------------
 //
@@ -21,14 +25,48 @@ void handleCertificatesGetRootCa(MongooseHttpServerRequest *request, MongooseHtt
   response->print(certs.getRootCa());
 }
 
+void handleCertificatesGenerateSelfSigned(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
+{
+  (void)request;
+#if defined(CERT_VALIDATOR_OPENSSL)
+  response->setCode(501);
+  response->print("{\"msg\":\"Self-signed certificate generation is not available in native builds.\"}");
+#else
+  String certPem, keyPem;
+  if(!generateSelfSignedCertificate(esp_hostname, net.getIp(), certPem, keyPem)) {
+    response->setCode(500);
+    response->print("{\"msg\":\"Failed to generate certificate\"}");
+    return;
+  }
+
+  DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+  doc["name"] = "Self-signed (" + esp_hostname + ")";
+  doc["certificate"] = certPem;
+  doc["key"] = keyPem;
+
+  uint64_t id = UINT64_MAX;
+  if(certs.addCertificate(doc, &id)) {
+    doc.clear();
+    doc["id"] = String(id, HEX);
+    doc["msg"] = "done";
+    serializeJson(doc, *response);
+    response->setCode(200);
+  } else {
+    response->setCode(400);
+    response->print("{\"msg\":\"Could not add certificate\"}");
+  }
+#endif
+}
+
 
 // -------------------------------------------------------------------
 //
 // url: /certificates
 // -------------------------------------------------------------------
-void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
+void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response,
+                           bool hasCertificate, uint64_t certificate)
 {
-  if(UINT64_MAX == certificate)
+  if(!hasCertificate)
   {
     // Emit the array one certificate at a time. Building it in a single
     // document required a buffer sized for every PEM body at once — 32KB here
@@ -42,7 +80,7 @@ void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServe
     size_t emitted = 0;
     for(size_t i = 0; i < count; i++)
     {
-      DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+      JsonDocument doc;
       if(!certs.serializeCertificateAt(doc, i)) {
         continue;
       }
@@ -59,7 +97,7 @@ void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServe
     return;
   }
 
-  DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+  JsonDocument doc;
   if(certs.serializeCertificate(doc, certificate)) {
     response->setCode(200);
     serializeJson(doc, *response);
@@ -69,14 +107,15 @@ void handleCertificatesGet(MongooseHttpServerRequest *request, MongooseHttpServe
   }
 }
 
-void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
+void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response,
+                            bool hasCertificate)
 {
   String body = request->body().toString();
   DBUGVAR(body);
 
-  if(UINT64_MAX == certificate)
+  if(!hasCertificate)
   {
-    DynamicJsonDocument doc(CERTIFICATE_JSON_BUFFER_SIZE);
+    JsonDocument doc;
     DeserializationError jsonError = deserializeJson(doc, body);
     if(DeserializationError::Ok == jsonError)
     {
@@ -85,7 +124,7 @@ void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServ
       {
         DBUGVAR(id, HEX);
         doc.clear();
-        doc["id"] = String(id, HEX);
+        doc["id"] = certificate_id_hex(id);
         doc["msg"] = "done";
         serializeJson(doc, *response);
         response->setCode(200);
@@ -103,16 +142,30 @@ void handleCertificatesPost(MongooseHttpServerRequest *request, MongooseHttpServ
   }
 }
 
-void handleCertificatesDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, uint64_t certificate)
+/**
+ * Delete an explicit ID: respond 200 for removal, 404 for no live match, or 500
+ * for a reported transaction error. A collection DELETE receives 405.
+ * @param hasCertificate Distinguishes an ID route, including UINT64_MAX, from the collection.
+ */
+void handleCertificatesDelete(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response,
+                              bool hasCertificate, uint64_t certificate)
 {
-  if(UINT64_MAX != certificate)
+  if(hasCertificate)
   {
-    if(certs.removeCertificate(certificate)) {
-      response->setCode(200);
-      response->print("{\"msg\":\"done\"}");
-    } else {
-      response->setCode(404);
-      response->print("{\"msg\":\"Not found\"}");
+    switch(certs.removeCertificate(certificate))
+    {
+      case CertificateStore::RemoveResult::Removed:
+        response->setCode(200);
+        response->print("{\"msg\":\"done\"}");
+        break;
+      case CertificateStore::RemoveResult::NotFound:
+        response->setCode(404);
+        response->print("{\"msg\":\"Not found\"}");
+        break;
+      case CertificateStore::RemoveResult::Error:
+        response->setCode(500);
+        response->print("{\"msg\":\"Could not remove certificate\"}");
+        break;
     }
   } else {
     response->setCode(405);
@@ -129,7 +182,8 @@ void handleCertificates(MongooseHttpServerRequest *request)
     return;
   }
 
-  uint64_t certificate = UINT64_MAX;
+  uint64_t certificate = 0;
+  bool hasCertificate = false;
 
   String path = request->uri();
   if(path.length() > CERTIFICATES_PATH_LEN) {
@@ -147,6 +201,17 @@ void handleCertificates(MongooseHttpServerRequest *request)
         response->setCode(405);
         response->print("{\"msg\":\"Method not allowed\"}");
       }
+    } else if(clientStr == "self-signed")
+    {
+      if(HTTP_POST == request->method())
+      {
+        handleCertificatesGenerateSelfSigned(request, response);
+        request->send(response);
+        return;
+      } else {
+        response->setCode(405);
+        response->print("{\"msg\":\"Method not allowed\"}");
+      }
     } else {
       // A non-hex path segment parsed with a throwing conversion aborted and
       // rebooted the board on GET /certificates/zz. Anything that is not a
@@ -157,17 +222,18 @@ void handleCertificates(MongooseHttpServerRequest *request)
         request->send(response);
         return;
       }
+      hasCertificate = true;
     }
   }
 
   DBUGVAR(certificate, HEX);
 
   if(HTTP_GET == request->method()) {
-    handleCertificatesGet(request, response, certificate);
+    handleCertificatesGet(request, response, hasCertificate, certificate);
   } else if(HTTP_POST == request->method()) {
-    handleCertificatesPost(request, response, certificate);
+    handleCertificatesPost(request, response, hasCertificate);
   } else if(HTTP_DELETE == request->method()) {
-    handleCertificatesDelete(request, response, certificate);
+    handleCertificatesDelete(request, response, hasCertificate, certificate);
   } else {
     response->setCode(405);
     response->print("{\"msg\":\"Method not allowed\"}");

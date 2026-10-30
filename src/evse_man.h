@@ -19,6 +19,7 @@ typedef uint32_t EvseClient;
 #define EvseClient_Vendor_OpenEVSE            0x0001
 #define EvseClient_Vendor_OpenEnergyMonitor   0x0002
 #define EvseClient_Vendor_BigJungle           0x0003
+#define EvseClient_Vendor_evcc                0x0004
 
 #define EvseClient_Vendor_Unregistered        0xFFFE
 #define EvseClient_Vendor_Reserved            0xFFFF
@@ -39,6 +40,10 @@ typedef uint32_t EvseClient;
 #define EvseClient_OpenEVSE_LoadSharing       EVC(EvseClient_Vendor_OpenEVSE, 0x000E)
 
 #define EvseClient_OpenEnergyMonitor_DemandShaper EVC(EvseClient_Vendor_OpenEnergyMonitor, 0x0001)
+
+// evcc (https://github.com/evcc-io/evcc) via github.com/OpenEVSE/go-openevse:
+// 262145, the default client id its driver claims with.
+#define EvseClient_evcc                       EVC(EvseClient_Vendor_evcc, 0x0001)
 
 #define EvseClient_NULL                       ((EvseClient)UINT32_MAX)
 
@@ -68,7 +73,7 @@ typedef uint32_t EvseClient;
 #define EVSE_MANAGER_MAX_CLIENT_CLAIMS 10
 #endif // !EVSE_MANAGER_MAX_CLIENT_CLAIMS
 
-class EvseProperties : virtual public JsonSerialize<512>
+class EvseProperties : virtual public JsonSerialize
 {
   private:
     EvseState _state;
@@ -300,9 +305,9 @@ class EvseManager : public MicroTasks::Task
       return _charge_current_client;
     }
 
-    bool serializeClaims(DynamicJsonDocument &doc);
-    bool serializeClaim(DynamicJsonDocument &doc, EvseClient client);
-    bool serializeTarget(DynamicJsonDocument &doc);
+    bool serializeClaims(JsonDocument &doc);
+    bool serializeClaim(JsonDocument &doc, EvseClient client);
+    bool serializeTarget(JsonDocument &doc);
 
     // Evse Status
     bool isConnected() {
@@ -335,6 +340,9 @@ class EvseManager : public MicroTasks::Task
     }
     double getAmps() {
       return _monitor.getAmps();
+    }
+    long getPilot() {
+      return _monitor.getPilot();
     }
     double getVoltage() {
       return _monitor.getVoltage();
@@ -417,6 +425,12 @@ class EvseManager : public MicroTasks::Task
     bool isOvercurrentMonitorEnabled() {
       return _monitor.isOvercurrentMonitorEnabled();
     }
+    bool isSettingsKnown() {
+      return _monitor.isSettingsKnown();
+    }
+    uint32_t getSettingsFlags() {
+      return _monitor.getSettingsFlags();
+    }
     uint32_t getPanicTemperature() {
       return _monitor.getPanicTemperature();
     }
@@ -443,6 +457,12 @@ class EvseManager : public MicroTasks::Task
     }
     EvseMonitor::LcdType getLcdType() {
       return _monitor.getLcdType();
+    }
+    void setLcdType(EvseMonitor::LcdType type, std::function<void(int ret)> callback = NULL) {
+      _monitor.setLcdType(type, callback);
+    }
+    bool isLcdTypeSupported() {
+      return _monitor.isLcdTypeSupported();
     }
     const char *getFirmwareVersion() {
       return _monitor.getFirmwareVersion();
@@ -566,6 +586,37 @@ class EvseManager : public MicroTasks::Task
     void resetRelayHealth(std::function<void(int ret)> callback = NULL) {
       _monitor.resetRelayHealth(callback);
     }
+
+#ifdef ENABLE_CABLE_TEMP
+    // Cable NTC thermistor monitoring (controller firmware 9.4.0+, requires
+    // its CABLE_TEMPERATURE_MONITORING feature). source is an
+    // OPENEVSE_CABLE_TEMP_SOURCE_xxx index.
+    bool isCableTempKnown() { return _monitor.isCableTempKnown(); }
+    bool isCableTempConfigKnown() { return _monitor.isCableTempConfigKnown(); }
+    bool isCableTempConfigValid(uint8_t source) { return _monitor.isCableTempConfigValid(source); }
+    bool isCableTempEnabled() { return _monitor.isCableTempEnabled(); }
+    bool isCableTempCommandKnown() { return _monitor.isCableTempCommandKnown(); }
+    bool isCableTempValid(uint8_t source) { return _monitor.isCableTempValid(source); }
+    double getCableTemp(uint8_t source) { return _monitor.getCableTemp(source); }
+    uint8_t getCableTempStatus(uint8_t source) { return _monitor.getCableTempStatus(source); }
+    bool isCableTempAssigned(uint8_t source) { return _monitor.isCableTempAssigned(source); }
+    uint8_t getCableTempPin(uint8_t source) { return _monitor.getCableTempPin(source); }
+    uint32_t getCableTempR25(uint8_t source) { return _monitor.getCableTempR25(source); }
+    uint32_t getCableTempBeta(uint8_t source) { return _monitor.getCableTempBeta(source); }
+    int32_t getCableTempOffsetC10(uint8_t source) { return _monitor.getCableTempOffsetC10(source); }
+    int32_t getCableTempPanicC10(uint8_t source) { return _monitor.getCableTempPanicC10(source); }
+    void enableCableTemp(bool enabled, std::function<void(int ret)> callback = NULL) {
+      _monitor.enableCableTemp(enabled, callback);
+    }
+    void setCableTempConfig(uint8_t source, uint8_t pin, uint32_t r25, uint32_t beta,
+                            int32_t offset_c10, int32_t panic_c10,
+                            std::function<void(int ret)> callback = NULL) {
+      _monitor.setCableTempConfig(source, pin, r25, beta, offset_c10, panic_c10, callback);
+    }
+    void setCableTempPin(uint8_t source, uint8_t pin, std::function<void(int ret)> callback = NULL) {
+      _monitor.setCableTempPin(source, pin, callback);
+    }
+#endif // ENABLE_CABLE_TEMP
     void restartEvse() {
       _monitor.restart();
     }

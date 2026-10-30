@@ -26,7 +26,8 @@ reviewers should verify each relevant item before proposing a change.
    assertion in `divert_sim/test_config.py`** — that suite exists to catch
    accidental default changes.
 6. Boolean config flags are bit positions in the `uint32_t flags` word; never
-   reuse a bit.
+   reuse a bit, including a retired one (a device that had it set keeps it set
+   across an upgrade). `flags` has no bits left — new ones go in `flags2`.
 
 ## Firmware code patterns
 

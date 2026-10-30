@@ -24,13 +24,22 @@ hardware is present.
 ## Charger
 
 - **[Charger](screenshots/settings-evse-dark-desktop.png)** — service level,
-  maximum current, LCD/LED options, button behaviour, three-phase mode.
+  maximum current, LCD/LED options, button behaviour, three-phase mode
+  (`is_threephase`). Two related keys in `/config` have no control of their
+  own: `charge_mode` is the divert mode, the string `"fast"` (Normal) or
+  `"eco"`, which the [divert](solar-divert.md) mode is restored from at boot,
+  and `factory_write_lock` is set by the firmware once the factory settings
+  have been written, to stop them being overwritten.
 - **[Safety](screenshots/settings-safety-dark-desktop.png)** — see
   [Safety](safety.md).
 - **Time & Date** <a id="time--date"></a>
   ([screenshot](screenshots/settings-time-dark-desktop.png)) — SNTP time sync,
   timezone (POSIX rules, DST handled automatically), manual sync. Schedules
-  depend on this being right.
+  depend on this being right. If the DHCP server hands out an NTP server
+  (option 42) it is used in preference to the configured one — handy on
+  isolated networks — falling back to the configured host if it stops
+  answering; the page shows which server is in use. Turn off *Use NTP
+  server from DHCP* to always use the configured host.
 - **[RFID](screenshots/settings-rfid-dark-desktop.png)** — see [RFID](rfid.md).
 - **[Vehicle](screenshots/settings-vehicle-dark-desktop.png)** — see
   [Vehicle](vehicle.md).
@@ -41,8 +50,9 @@ hardware is present.
   [Solar divert](solar-divert.md).
 - **[Load Shaper](screenshots/settings-shaper-dark-desktop.png)** — see
   [Load shaper](load-shaper.md).
-- **[EmonCMS](screenshots/settings-emoncms-dark-desktop.png)** and
-  **[OhmConnect](screenshots/settings-ohmconnect-dark-desktop.png)** — see
+- **Load Sharing** (Labs; shown once *Enable Labs features* is on under
+  Terminal) — see [Load sharing](load-sharing.md).
+- **[EmonCMS](screenshots/settings-emoncms-dark-desktop.png)** — see
   [Integrations](integrations.md).
 
 ## System
@@ -54,9 +64,20 @@ hardware is present.
   broker and servers.
 - **[Developer Tools](screenshots/settings-terminal-dark-desktop.png)** — a
   live RAPI terminal to the controller and the gateway debug console. RAPI
-  command reference: [rapi.md](../rapi.md).
+  command reference: [rapi.md](../rapi.md). Its **OpenEVSE Labs** switch
+  (`labs_enabled`, off by default) reveals in-development features — Load
+  Sharing, RFID tag names, and heap fragmentation probes — and lists them with
+  links once on. It is stored on the charger, so it applies to every browser.
+- **Installer Tools** (`/settings/installer`) — password-protected
+  commissioning controls: the one-time hardware maximum current, the safety
+  check switches, and the installer password. See
+  [Installer tools](installer-tools.md).
 - **[Display](screenshots/settings-display-dark-desktop.png)** — theme,
   brightness, and sleep timeout for the on-device TFT touchscreen (only shown
-  on TFT-equipped hardware).
+  on TFT-equipped hardware). On chargers with the 2-line character LCD
+  instead: the backlight type (RGB, or monochrome for a JuiceBox v2
+  conversion) and the same idle timeout, which switches the LCD backlight
+  off; it stays lit while charging or in a fault, and any state change or
+  button press lights it again. "Never" keeps it always on.
 - **[About](screenshots/settings-about-dark-desktop.png)** — versions, device
   info, and diagnostics.

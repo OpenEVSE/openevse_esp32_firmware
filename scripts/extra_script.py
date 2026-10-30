@@ -4,109 +4,10 @@ from pprint import pprint
 import hashlib
 import pathlib
 import glob
+import struct
+import zlib
 
 Import("env")
-
-# ---------------------------------------------------------------------------
-# Patch ArduinoMongoose's MongooseSntpClient so that:
-#
-#  1. getTime() closes any stale Mongoose UDP connection before starting a
-#     new one.  MG_EV_CLOSE may never fire for UDP SNTP, so _nc stays
-#     non-NULL after the first sync and silently blocks every subsequent
-#     getTime() call (returns false without sending any traffic).
-#
-#  2. MG_EV_CLOSE only clears _nc when it matches the closing connection
-#     so a delayed close of an old connection doesn't clobber a freshly
-#     started new one.
-#
-# This patch is applied every build and is idempotent.
-# ---------------------------------------------------------------------------
-
-SNTP_PATCH_MARKER = "MG_F_CLOSE_IMMEDIATELY"  # present only after patching
-
-OLD_GET_TIME = """\
-bool MongooseSntpClient::getTime(const char *server, MongooseSntpTimeHandler onTime)
-{
-  if(NULL == _nc)
-  {
-    DBUGF("Trying to connect to %s", server);
-    _onTime = onTime;
-
-    _nc = mg_sntp_get_time(Mongoose.getMgr(), eventHandler, server, this);
-    if(_nc) {
-      return true;
-    }
-
-    DBUGF("Failed to connect to %s", server);
-  }
-
-  return false;
-}"""
-
-NEW_GET_TIME = """\
-bool MongooseSntpClient::getTime(const char *server, MongooseSntpTimeHandler onTime)
-{
-  // Close any stale connection — MG_EV_CLOSE may never fire for UDP SNTP,
-  // leaving _nc permanently non-NULL and silently blocking all future calls.
-  if(_nc != NULL) {
-    _nc->flags |= MG_F_CLOSE_IMMEDIATELY;
-    _nc = NULL;
-  }
-  DBUGF("Trying to connect to %s", server);
-  _onTime = onTime;
-  _nc = mg_sntp_get_time(Mongoose.getMgr(), eventHandler, server, this);
-  if(_nc) {
-    return true;
-  }
-  DBUGF("Failed to connect to %s", server);
-  return false;
-}"""
-
-OLD_EV_CLOSE = """\
-    case MG_EV_CLOSE: {
-      DBUGF("Connection %p closed", nc);
-      _nc = NULL;
-      break;
-    }"""
-
-NEW_EV_CLOSE = """\
-    case MG_EV_CLOSE: {
-      DBUGF("Connection %p closed", nc);
-      // Only clear _nc if it still refers to THIS connection so a delayed
-      // close of an old connection doesn't clobber a newly started one.
-      if(_nc == nc) {
-        _nc = NULL;
-      }
-      break;
-    }"""
-
-def patch_sntp_client():
-    libdeps_dir = join(env.subst("$PROJECT_DIR"), ".pio", "libdeps")
-    if not isdir(libdeps_dir):
-        return
-    for candidate in glob.glob(join(libdeps_dir, "*", "ArduinoMongoose",
-                                    "src", "MongooseSntpClient.cpp")):
-        try:
-            with open(candidate, "r") as f:
-                original = f.read()
-            if SNTP_PATCH_MARKER in original:
-                continue  # already patched
-            # Normalize trailing whitespace on each line before matching —
-            # some library versions have a trailing space on `if(NULL == _nc)`
-            # which would cause an exact-string match to silently fail.
-            content = "\n".join(line.rstrip() for line in original.splitlines())
-            if OLD_GET_TIME not in content:
-                print("Warning: MongooseSntpClient patch target not found in %s" % candidate)
-                continue
-            content = content.replace(OLD_GET_TIME, NEW_GET_TIME)
-            content = content.replace(OLD_EV_CLOSE, NEW_EV_CLOSE)
-            with open(candidate, "w") as f:
-                f.write(content)
-            print("Patched MongooseSntpClient: %s" % candidate)
-        except Exception as e:
-            print("Warning: Could not patch %s: %s" % (candidate, e))
-
-patch_sntp_client()
 
 # Dump construction environment (for debug purpose)
 #print(env.Dump())
@@ -138,6 +39,75 @@ def text_to_header(source_file):
     output += "static const char CONTENT_{}_ETAG[] PROGMEM = \"{}\";\n".format(filename, hashlib.sha256(original.encode('utf-8')).hexdigest())
     return output
 
+def _png_chunks(raw):
+    off = 8
+    while off + 8 <= len(raw):
+        (length,) = struct.unpack(">I", raw[off:off + 4])
+        yield raw[off + 4:off + 8], raw[off + 8:off + 8 + length]
+        off += length + 12
+
+
+def _png_chunk(chunk_type, data):
+    return (struct.pack(">I", len(data)) + chunk_type + data +
+            struct.pack(">I", zlib.crc32(chunk_type + data) & 0xffffffff))
+
+
+def optimise_png(raw):
+    """Losslessly shrink a PNG by re-deflating its image data.
+
+    PNG stores its pixels as a zlib stream, and the encoders that produce
+    these icons do not use the highest compression setting. Concatenating
+    the IDAT chunks and re-deflating that byte stream at level 9, trying
+    each strategy and keeping the smallest, typically recovers 15-35% with
+    no change whatsoever to the image: the *filtered* scanline data handed
+    to zlib is passed through untouched, so this cannot alter a pixel. The
+    result is verified to round-trip before it is used.
+
+    Worth ~11KB across the PWA icons, on a 4MB image that has been running
+    at ~99.7% of its app partition -- see docs/flash_budget.md.
+
+    Every other chunk (IHDR, PLTE, tRNS, pHYs, ...) is copied through
+    unchanged, so nothing but the compression setting differs.
+    """
+    if raw[:8] != b"\x89PNG\r\n\x1a\n":
+        return raw
+
+    image_data = b""
+    keep = []
+    idat_added = False
+    try:
+        for chunk_type, data in _png_chunks(raw):
+            if chunk_type == b"IDAT":
+                image_data += data
+                if not idat_added:
+                    keep.append((chunk_type, None))
+                    idat_added = True
+            else:
+                keep.append((chunk_type, data))
+        filtered = zlib.decompress(image_data)
+    except Exception:
+        return raw  # not something we understand - leave it alone
+
+    best = None
+    for strategy in (zlib.Z_DEFAULT_STRATEGY, zlib.Z_FILTERED, zlib.Z_RLE):
+        deflate = zlib.compressobj(9, zlib.DEFLATED, 15, 9, strategy)
+        blob = deflate.compress(filtered) + deflate.flush()
+        if best is None or len(blob) < len(best):
+            best = blob
+
+    out = b"\x89PNG\r\n\x1a\n"
+    for chunk_type, data in keep:
+        out += _png_chunk(chunk_type, best if chunk_type == b"IDAT" else data)
+
+    # Refuse to emit anything whose image data does not decompress back to
+    # exactly what we were given, and never grow a file.
+    check = b"".join(d for t, d in _png_chunks(out) if t == b"IDAT")
+    if zlib.decompress(check) != filtered or len(out) >= len(raw):
+        return raw
+
+    return out
+
+
 def binary_to_header(source_file):
     filename = get_c_name(source_file)
     output = "static const char CONTENT_"+filename+"[] PROGMEM = {\n  "
@@ -146,16 +116,18 @@ def binary_to_header(source_file):
     etag = hashlib.sha256()
 
     with open(source_file, "rb") as source_fh:
-        byte = source_fh.read(1)
-        while byte != b"":
-            output += "0x{:02x}, ".format(ord(byte))
-            etag.update(byte)
-            count += 1
-            if 16 == count:
-                output += "\n  "
-                count = 0
+        content = source_fh.read()
 
-            byte = source_fh.read(1)
+    if source_file.lower().endswith(".png"):
+        content = optimise_png(content)
+
+    for byte in content:
+        output += "0x{:02x}, ".format(byte)
+        etag.update(bytes([byte]))
+        count += 1
+        if 16 == count:
+            output += "\n  "
+            count = 0
 
     output += "0x00 };\n"
     output += "static const char CONTENT_{}_ETAG[] PROGMEM = \"{}\";\n".format(filename, etag.hexdigest())
@@ -210,9 +182,6 @@ def make_safe(file):
 def make_static_web(env, target, source):
     return make_static(env, target, source, "web_server", dist_dir)
 
-def make_static_lcd(env, target, source):
-    return make_static(env, target, source, "lcd_gui", lcd_gui_dir)
-
 def make_static(env, target, source, prefix, files_dir):
     output = ""
 
@@ -254,7 +223,10 @@ def make_static(env, target, source, prefix, files_dir):
 
         if filetype is not None:
             c_name = get_c_name(out_file)
-            output += "  { \"/"+out_file.replace(".gz","")+"\", CONTENT_"+c_name+", sizeof(CONTENT_"+c_name+") - 1, _CONTENT_TYPE_"+filetype+", CONTENT_"+c_name+"_ETAG, "+("true" if compress else "false")+" },\n"
+            # NULL means "served as-is"; otherwise this is the Content-Encoding
+            # the bytes on disk were written with.
+            encoding = "\"gzip\"" if compress else "NULL"
+            output += "  { \"/"+out_file.replace(".gz","")+"\", CONTENT_"+c_name+", sizeof(CONTENT_"+c_name+") - 1, _CONTENT_TYPE_"+filetype+", CONTENT_"+c_name+"_ETAG, "+encoding+" },\n"
         else:
             print("Warning: Could not detect filetype for %s" % (out_file))
 
@@ -287,8 +259,8 @@ if npm_installed:
 
     gui_name = environ.get("GUI_NAME")
     if gui_name in (None, ""):
-        # Default web UI for this fork. Override with GUI_NAME=gui-v2 to build
-        # the upstream gui-v2 instead. Both are submodules (see .gitmodules).
+        # Default web UI for this fork (a submodule, see .gitmodules). Override
+        # with GUI_NAME=<dir> to build a different GUI checkout instead.
         gui_name = "gui-nightshift"
 
     gui_dir = join(env.subst("$PROJECT_DIR"), gui_name)
@@ -304,15 +276,10 @@ if npm_installed:
             else:
                 print("Warning: GUI not built, run 'cd %s; npm run build'" % (gui_dir))
         else:
-            print("Warning: GUI dependencies not found, run 'cd %s; npm install'" % (gui_dir))
+            print("Warning: GUI dependencies not found, run 'cd %s; npm ci'" % (gui_dir))
     else:
         print("Warning: GUI files not found, run 'git submodule update --init' (%s)" % (gui_dir))
 else:
   print("Warning: Node.JS and NPM required to update the UI")
-
-# LCD GUI files
-lcd_gui_dir = join(env.subst("$PROJECT_DIR"), "gui-tft")
-headers_src = join(env.subst("$PROJECTSRC_DIR"), "lcd_static")
-process_html_app(lcd_gui_dir, headers_src, env, "lcd_gui", make_static_lcd)
 
 print("PATH="+env['ENV']['PATH'])

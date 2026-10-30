@@ -18,6 +18,7 @@
 #include "standby_screen.h"
 #include "fault_screen.h"
 #include "fault_text.h"
+#include "notifications.h"
 
 // Advance LVGL until the screen has settled, then a few frames more.
 //
@@ -43,6 +44,78 @@ static bool write_capture(const char *out_dir, const char *name)
   char path[256];
   snprintf(path, sizeof(path), "%s/%s.ppm", out_dir, name);
   return lvgl_panel_write_ppm(path);
+}
+
+// Compare two captures byte for byte, and say where they part company.
+//
+// Every other capture is judged against a baseline from a previous build, which
+// only a human diffing two directories can do. This one pair is different: both
+// images come out of the same run and are required to be identical to each
+// other, so the export can check it itself and fail. Without that the invariant
+// is only a comment, and the regression it guards is exactly the kind that goes
+// unnoticed -- a stale field on a screen that still renders correctly from
+// scratch.
+static bool captures_match(const char *out_dir, const char *a, const char *b)
+{
+  char pa[256], pb[256];
+  snprintf(pa, sizeof(pa), "%s/%s.ppm", out_dir, a);
+  snprintf(pb, sizeof(pb), "%s/%s.ppm", out_dir, b);
+
+  FILE *fa = fopen(pa, "rb");
+  FILE *fb = fopen(pb, "rb");
+  if(NULL == fa || NULL == fb) {
+    fprintf(stderr, "capture: cannot reopen %s for comparison: %s\n",
+            (NULL == fa) ? pa : pb, strerror(errno));
+    if(NULL != fa) { fclose(fa); }
+    if(NULL != fb) { fclose(fb); }
+    return false;
+  }
+
+  bool same = true;
+  size_t offset = 0;
+  for(;;) {
+    char ba[4096], bb[4096];
+    size_t na = fread(ba, 1, sizeof(ba), fa);
+    size_t nb = fread(bb, 1, sizeof(bb), fb);
+    if(na != nb || 0 != memcmp(ba, bb, na)) {
+      same = false;
+      break;
+    }
+    offset += na;
+    if(0 == na) {
+      break;
+    }
+  }
+
+  fclose(fa);
+  fclose(fb);
+
+  if(!same) {
+    fprintf(stderr,
+            "capture: %s.ppm and %s.ppm differ (from byte %zu) -- returning to a\n"
+            "         previously captured state left something stale on screen.\n",
+            a, b, offset);
+  }
+  return same;
+}
+
+// Advisory line text, formatted exactly the way lcd_lvgl.cpp builds it: the
+// worst advisory's short text, with a "+N" suffix when more are live. A
+// separate buffer from lcd_lvgl.cpp's file-scope notify_buf -- this is
+// host-only capture code in its own translation unit, never linked into a
+// firmware image.
+static char cap_notify_buf[48];
+
+static const char *sample_notify_line(const char *id, size_t extra_count)
+{
+  if(extra_count > 0) {
+    snprintf(cap_notify_buf, sizeof(cap_notify_buf), LV_SYMBOL_WARNING " %s  +%u",
+             notification_short_text(id), (unsigned)extra_count);
+  } else {
+    snprintf(cap_notify_buf, sizeof(cap_notify_buf), LV_SYMBOL_WARNING " %s",
+             notification_short_text(id));
+  }
+  return cap_notify_buf;
 }
 
 static ChargeScreenData sample_charge_data()
@@ -151,6 +224,26 @@ bool lvgl_capture_write_samples(const char *out_dir)
   if(!write_capture(out_dir, "charge-charging")) {
     return false;
   }
+  const ChargeScreenData charging_snapshot = d;
+
+  // Advisory active while charging: the amber perimeter border plus the
+  // worst advisory named on the top strip's second line (a transient message
+  // would win that line instead - see charge_screen.cpp). Two advisories are
+  // live, so this also exercises the "+N" suffix. Neither --dump-lvgl-screens
+  // path was otherwise rendered anywhere in the tree.
+  d.msg_line = "";
+  d.notify_active = true;
+  d.notify_line = sample_notify_line("thermal.high_temp", 2);
+  charge_screen_update(d);
+  pump_frames();
+  if(!write_capture(out_dir, "charge-advisory")) {
+    return false;
+  }
+
+  // Clear the advisory before the remaining scenarios, which exercise
+  // unrelated screen states and must not carry the border over by accident.
+  d.notify_active = false;
+  d.notify_line = "";
 
   // Worst-case widths: the longest fault word, the longest claim name and
   // three-digit figures all at once.
@@ -171,6 +264,27 @@ bool lvgl_capture_write_samples(const char *out_dir)
   charge_screen_update(d);
   pump_frames();
   if(!write_capture(out_dir, "charge-fault")) {
+    return false;
+  }
+
+  // Return to the state captured as charge-charging, on the SAME screen
+  // objects, after a detour through a different one. This must come out
+  // byte-identical to charge-charging.
+  //
+  // It is the regression test for the write-if-changed guards in
+  // screen_common.h: those skip an LVGL write when the value matches what the
+  // object already holds, so a guard that compared against the wrong thing --
+  // or a cached "last applied" value that a screen forgot to reset -- would
+  // leave a field showing the detour's value here while every from-scratch
+  // render still looked right. captures_match() below compares the two PPMs
+  // and fails the export if they differ; a single-shot render never could.
+  d = charging_snapshot;
+  charge_screen_update(d);
+  pump_frames();
+  if(!write_capture(out_dir, "charge-charging-again")) {
+    return false;
+  }
+  if(!captures_match(out_dir, "charge-charging", "charge-charging-again")) {
     return false;
   }
 
@@ -196,6 +310,19 @@ bool lvgl_capture_write_samples(const char *out_dir)
   standby_screen_update(sd);
   pump_frames();
   if(!write_capture(out_dir, "standby")) {
+    return false;
+  }
+
+  // Advisory active on standby: the amber perimeter border, and the advisory
+  // takes the footer line outright in place of the hostname/IP -- a warning
+  // outranks knowing where to point a browser (see standby_screen.cpp). A
+  // single advisory here, so this also confirms the "+N" suffix is only
+  // added when there is more than one.
+  sd.notify_active = true;
+  sd.notify_line = sample_notify_line("safety.relay_check", 0);
+  standby_screen_update(sd);
+  pump_frames();
+  if(!write_capture(out_dir, "standby-advisory")) {
     return false;
   }
 

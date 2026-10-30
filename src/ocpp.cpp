@@ -624,9 +624,8 @@ void OcppTask::initializeDiagnosticsService() {
             diagFailure = false;
 
             //check if input URL is valid
-            unsigned int port_i = 0;
-            struct mg_str scheme, query, fragment;
-            if (mg_parse_uri(mg_mk_str(location.c_str()), &scheme, NULL, NULL, &port_i, NULL, &query, &fragment)) {
+            struct mg_str host = mg_url_host(location.c_str());
+            if (host.len == 0) {
                 DBUGF("[ocpp] Diagnostics upload, invalid URL: %s", location.c_str());
                 diagFailure = true;
                 return false;
@@ -657,7 +656,7 @@ void OcppTask::initializeDiagnosticsService() {
             for (uint32_t i = 0; i <= (eventLog->getMaxIndex() - eventLog->getMinIndex()) && !overflow; i++) {
                 uint32_t index = eventLog->getMinIndex() + i;
 
-                eventLog->enumerate(index, [this, startTime, stopTime, &body, SUFFIX_RESERVED_AREA, &firstEntry, &overflow] (String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper) {
+                eventLog->enumerate(index, [this, startTime, stopTime, &body, SUFFIX_RESERVED_AREA, &firstEntry, &overflow] (String time, EventType type, const String &logEntry, EvseState managerState, uint8_t evseState, uint32_t evseFlags, uint8_t pilotState, uint16_t changed, uint32_t pilot, double energy, uint32_t elapsed, double temperature, double temperatureMax, uint8_t divertMode, uint8_t shaper, const String &rfidTag, const char *notification) {
                     if (overflow) return;
                     MicroOcpp::Timestamp timestamp = MicroOcpp::Timestamp();
                     if (time.isEmpty() || !timestamp.setTime(time.c_str())) {
@@ -714,7 +713,13 @@ void OcppTask::initializeDiagnosticsService() {
                     diagFailure = true;
                 }
             });
-            diagClient.send(request);
+            if (!request->send()) {
+                request->onResponse(MongooseHttpResponseHandler());
+                request->onClose(MongooseSocketCloseHandler());
+                delete request;
+                diagFailure = true;
+                return false;
+            }
 
             return true;
         });

@@ -5,15 +5,22 @@
 #include <EEPROM.h>             // Save config settings
 #include <ConfigJson.h>
 #include <LittleFS.h>
+#include "fs_usage.h"
 
 #include "app_config.h"
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
-#include "certificates.h"
 #include "temp_throttle.h"
 #include "flash_migrate.h"
 
 #include "web_auth_secret.h"
+
+// Needed unconditionally: ConfigOptLoadSharingRole (below) uses
+// loadSharingRoleFromJson() to register the loadsharing_role opt, and that
+// registration isn't gated by ENABLE_CONFIG_CHANGE_NOTIFICATION -- unlike
+// this file's other loadsharing-adjacent includes, which are only for
+// config_changed()'s notification body.
+#include "loadsharing_types.h"
 
 #if ENABLE_CONFIG_CHANGE_NOTIFICATION
 #include <esp_ota_ops.h>
@@ -25,9 +32,11 @@
 #include "emoncms.h"
 #include "input.h"
 #include "LedManagerTask.h"
+#include "lcd.h"
 #include "current_shaper.h"
 
 #include "limit.h"
+#include "shelly_lnm.h"
 #endif
 
 #ifndef HTTP_SERVER_PORT
@@ -61,9 +70,15 @@ String lang;
 String www_username;
 String www_password;
 String www_certificate_id;
+bool www_https_enabled;
 
 // Session HMAC key — generated on first load, rotated on credential change.
 String server_secret;
+
+// Installer-tools password (gates the GUI's Installer Tools page and the
+// one-time hardware-current write). Not a public setting: see
+// config_strip_internal().
+String installer_password;
 
 // Web server ports
 uint32_t www_http_port;
@@ -127,6 +142,10 @@ String time_zone;
 uint32_t flags;
 uint32_t flags_changed;
 
+// Second flags word (flags above is full)
+uint32_t flags2;
+uint32_t flags2_changed;
+
 
 // Divert settings
 int8_t divert_type;
@@ -134,6 +153,14 @@ double divert_PV_ratio;
 uint32_t divert_attack_smoothing_time;
 uint32_t divert_decay_smoothing_time;
 uint32_t divert_min_charge_time;
+
+// Shelly LNM settings
+bool shelly_lnm_enabled;
+String shelly_lnm_addr;
+uint16_t shelly_lnm_port;
+String shelly_lnm_power_field;
+String shelly_lnm_voltage_field;
+String shelly_lnm_device;
 
 // Current Shaper settings
 uint32_t current_shaper_max_pwr;
@@ -190,9 +217,15 @@ uint32_t loadsharing_config_version;
 uint32_t loadsharing_config_updated_at;
 uint32_t loadsharing_peers_version;
 uint32_t loadsharing_status_version;
-String loadsharing_role;
+bool loadsharing_role;
 String loadsharing_controller_host;
 uint32_t loadsharing_rotation_interval;
+
+// Advisory acknowledgements: "key:hextoken;" repeated, plus the firmware
+// version that wrote them. A version change drops the lot - a firmware
+// update is a service event, where a power cut is not.
+String notification_acks;
+String notification_acks_fw;
 
 String esp_hostname_default = "openevse-"+ESPAL.getShortId();
 
@@ -209,12 +242,97 @@ void config_changed(String name);
 #define CONFIG_DEFAULT_FLAGS (CONFIG_SERVICE_SNTP | \
                               CONFIG_OCPP_AUTO_AUTH | \
                               CONFIG_OCPP_OFFLINE_AUTH | \
+                              CONFIG_HTTP_ENABLED | \
                               CONFIG_TEMP_THROTTLE_DEFAULT | \
                               CONFIG_DEFAULT_STATE_DEFAULT | \
                               CONFIG_LCD_NETWORK_INFO)
 
 ConfigOptDefinition<uint32_t> flagsOpt = ConfigOptDefinition<uint32_t>(flags, CONFIG_DEFAULT_FLAGS, "flags", "f");
 ConfigOptDefinition<uint32_t> flagsChanged = ConfigOptDefinition<uint32_t>(flags_changed, 0, "flags_changed", "c");
+
+// No CONFIG2_* default is on yet, so flags2 needs none of flags' upgrade
+// migration dance (see config_load_settings()) - it starts out all zero.
+#define CONFIG_DEFAULT_FLAGS2 0
+ConfigOptDefinition<uint32_t> flags2Opt = ConfigOptDefinition<uint32_t>(flags2, CONFIG_DEFAULT_FLAGS2, "flags2", "f2");
+ConfigOptDefinition<uint32_t> flags2Changed = ConfigOptDefinition<uint32_t>(flags2_changed, 0, "flags2_changed", "c2");
+
+// Defined here rather than in loadsharing_types.cpp (its natural home)
+// because that file isn't compiled into the native_simulator build (see its
+// build_src_filter in platformio.ini) -- load sharing was deliberately kept
+// out of the simulator -- but this opt needs the helper in every build.
+bool loadSharingRoleFromJson(JsonVariant v) {
+  if (v.is<const char*>()) {
+    // Only the literal "member" was ever a member; "controller" and "" (the
+    // unset default) were both controller.
+    return String(v.as<const char*>()) == "member";
+  }
+  return v.as<bool>();
+}
+
+// loadsharing_role was a String ("", "controller", "member") before it became
+// a bool. ArduinoJson's asBoolean() returns true for any string value,
+// including "" and "controller" (VariantImpl.hpp's default case), so a plain
+// ConfigOptDefinition<bool> deserializing an already-persisted legacy string
+// -- on the very next boot load, via ConfigJson::load() -> deserialize() --
+// would read every existing controller as a member. This subclass routes
+// through loadSharingRoleFromJson() so a legacy value maps to the exact same
+// role it always meant, on both the boot-time load
+// and POST /config paths (they share this one deserialize()).
+class ConfigOptLoadSharingRole : public ConfigOpt
+{
+protected:
+  bool &_val;
+  bool _default;
+
+public:
+  ConfigOptLoadSharingRole(bool &v, bool d, const char *l, const char *s) :
+    ConfigOpt(l, s), _val(v), _default(d)
+  {
+  }
+
+  bool get() { return _val; }
+
+  bool set(bool value) {
+    if(_val != value) {
+      _val = value;
+      return true;
+    }
+    return false;
+  }
+
+  virtual bool serialize(CONFIG_JSON_DOC &doc, bool longNames, bool compactOutput, bool hideSecrets) {
+    if(!compactOutput || _val != _default) {
+      doc[name(longNames)] = _val;
+      return true;
+    }
+    return false;
+  }
+
+  virtual bool deserialize(CONFIG_JSON_DOC &doc) {
+    JsonVariant v;
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+    if(!doc[_long].isNull()) {
+      v = doc[_long];
+    } else if(!doc[_short].isNull()) {
+      v = doc[_short];
+    } else {
+      return false;
+    }
+#else
+    if(doc.containsKey(_long)) {
+      v = doc[_long];
+    } else if(doc.containsKey(_short)) {
+      v = doc[_short];
+    } else {
+      return false;
+    }
+#endif
+    return set(loadSharingRoleFromJson(v));
+  }
+
+  virtual void setDefault() { _val = _default; }
+};
+ConfigOptLoadSharingRole loadsharingRoleOpt = ConfigOptLoadSharingRole(loadsharing_role, false, "loadsharing_role", "lsr");
 
 ConfigOpt *opts[] =
 {
@@ -231,7 +349,11 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(www_username, "", "www_username", "au"),
   new ConfigOptSecret(www_password, "", "www_password", "ap"),
   new ConfigOptDefinition<String>(www_certificate_id, "", "www_certificate_id", "wc"),
+  new ConfigOptDefinition<bool>(www_https_enabled, false, "www_https_enabled", "wse"),
   new ConfigOptSecret(server_secret, "", "server_secret", "wsk"),
+
+// Installer password; the default is what a fresh or factory-reset unit uses.
+  new ConfigOptSecret(installer_password, INSTALLER_PASSWORD_DEFAULT, "installer_password", "ipw"),
 
 // Web server ports
   new ConfigOptDefinition<uint32_t>(www_http_port, HTTP_SERVER_PORT, "www_http_port", "whp"),
@@ -302,6 +424,14 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(divert_decay_smoothing_time, 600, "divert_decay_smoothing_time", "dds"),
   new ConfigOptDefinition<uint32_t>(divert_min_charge_time, 600, "divert_min_charge_time", "dt"),
 
+// Shelly LNM settings
+  new ConfigOptDefinition<bool>(shelly_lnm_enabled, false, "shelly_lnm_enabled", "sle"),
+  new ConfigOptDefinition<String>(shelly_lnm_addr, "239.255.55.55", "shelly_lnm_addr", "sla"),
+  new ConfigOptDefinition<uint16_t>(shelly_lnm_port, 5555, "shelly_lnm_port", "slpt"),
+  new ConfigOptDefinition<String>(shelly_lnm_power_field, "act_power", "shelly_lnm_power_field", "slpf"),
+  new ConfigOptDefinition<String>(shelly_lnm_voltage_field, "voltage", "shelly_lnm_voltage_field", "slvf"),
+  new ConfigOptDefinition<String>(shelly_lnm_device, "", "shelly_lnm_device", "sld"),
+
 // Current Shaper settings
   new ConfigOptDefinition<uint32_t>(current_shaper_max_pwr, 0, "current_shaper_max_pwr", "smp"),
   new ConfigOptDefinition<uint32_t>(current_shaper_smoothing_time, 60, "current_shaper_smoothing_time", "sst"),
@@ -344,10 +474,16 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<double>(loadsharing_failsafe_peer_assumed_current, 6.0, "loadsharing_failsafe_peer_assumed_current", "lsfpac"),
   new ConfigOptDefinition<uint32_t>(loadsharing_config_version, 0, "loadsharing_config_version", "lscv"),
   new ConfigOptDefinition<uint32_t>(loadsharing_config_updated_at, 0, "loadsharing_config_updated_at", "lscua"),
-  new ConfigOptDefinition<String>(loadsharing_role, "", "loadsharing_role", "lsr"),
+  &loadsharingRoleOpt,
   new ConfigOptDefinition<String>(loadsharing_controller_host, "", "loadsharing_controller_host", "lsch"),
   // Rotation interval in seconds (0 disables). Effective max ~49 days on 32-bit millis; larger values wrap.
   new ConfigOptDefinition<uint32_t>(loadsharing_rotation_interval, 1800, "loadsharing_rotation_interval", "lsri"),
+
+// Advisory acknowledgements: "key:hextoken;" repeated, plus the firmware
+// version that wrote them. A version change drops the lot - a firmware
+// update is a service event, where a power cut is not.
+  new ConfigOptDefinition<String>(notification_acks, "", "notification_acks", "nak"),
+  new ConfigOptDefinition<String>(notification_acks_fw, "", "notification_acks_fw", "nkv"),
 
 // Scheduler options
   new ConfigOptDefinition<uint32_t>(scheduler_start_window, SCHEDULER_DEFAULT_START_WINDOW, "scheduler_start_window", "ssw"),
@@ -355,6 +491,8 @@ ConfigOpt *opts[] =
 // Flags
   &flagsOpt,
   &flagsChanged,
+  &flags2Opt,
+  &flags2Changed,
 
 // Virtual Options
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_EMONCMS, CONFIG_SERVICE_EMONCMS, "emoncms_enabled", "ee"),
@@ -363,6 +501,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_RETAINED, CONFIG_MQTT_RETAINED, "mqtt_retained", "mrt"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_MQTT_NO_SYS_QUERY, 0, "mqtt_sys_query", "msq"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_SNTP, CONFIG_SERVICE_SNTP, "sntp_enabled", "se"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SNTP_NO_DHCP, 0, "sntp_dhcp", "sd"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_TESLA, CONFIG_SERVICE_TESLA, "tesla_enabled", "te"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_DIVERT, CONFIG_SERVICE_DIVERT, "divert_enabled", "de"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_SERVICE_CUR_SHAPER, CONFIG_SERVICE_CUR_SHAPER, "current_shaper_enabled", "cse"),
@@ -381,8 +520,12 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TEMP_THROTTLE, CONFIG_TEMP_THROTTLE, "temp_throttle_enabled", "tte"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_LCD_NETWORK_INFO, CONFIG_LCD_NETWORK_INFO, "lcd_network_info", "lni"),
   new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_TFT_12H_CLOCK, CONFIG_TFT_12H_CLOCK, "tft_12h_clock", "t12"),
+  new ConfigOptVirtualMaskedBool(flagsOpt, flagsChanged, CONFIG_HTTP_ENABLED, CONFIG_HTTP_ENABLED, "www_http_enabled", "whe"),
   new ConfigOptVirtualMqttProtocol(flagsOpt, flagsChanged, "mqtt_protocol", "mprt"),
-  new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd")
+  new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd"),
+
+// flags2 virtual options
+  new ConfigOptVirtualMaskedBool(flags2Opt, flags2Changed, CONFIG2_LABS_ENABLED, CONFIG2_LABS_ENABLED, "labs_enabled", "labs")
 };
 
 ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
@@ -402,7 +545,7 @@ increment_config() {
   DBUGVAR(config_ver);
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
-  StaticJsonDocument<128> event;
+  JsonDocument event;
   event["config_version"] = config_ver;
   event_send(event);
   #endif
@@ -510,10 +653,16 @@ void config_changed(String name)
       emoncms_updated = true;
     }
     timeManager.setSntpEnabled(config_sntp_enabled());
+    timeManager.setDhcpEnabled(config_sntp_dhcp());
     OcppTask::notifyConfigChanged();
     evse.setSleepForDisable(!config_pause_uses_disabled());
   } else if(name.startsWith("mqtt_")) {
     mqtt.restartConnection();
+  } else if(name.startsWith("shelly_lnm_")) {
+    shelly_lnm.notifyConfigChanged();
+    if(name == "shelly_lnm_enabled") {
+      mqtt.restartConnection();
+    }
   } else if(name.startsWith("ocpp_")) {
     OcppTask::notifyConfigChanged();
   } else if(name.startsWith("emoncms_")) {
@@ -542,8 +691,14 @@ void config_changed(String name)
     limit.setDefaultLimit(limit_default_type.c_str(), limit_default_value);
   } else if(name == "sntp_enabled") {
     timeManager.setSntpEnabled(config_sntp_enabled());
+  } else if(name == "sntp_dhcp") {
+    timeManager.setDhcpEnabled(config_sntp_dhcp());
   } else if(name == "sntp_hostname") {
     timeManager.setHost(sntp_hostname.c_str());
+  } else if(name == "lcd_backlight_timeout") {
+    // The display task sleeps until its next scheduled update; nudge it so a
+    // new timeout (or "never") applies now rather than at the next state change
+    MicroTask.wakeTask(&lcd);
   }
 #endif
 }
@@ -563,45 +718,96 @@ void config_user_commit()
   user_config.commit();
 }
 
-bool config_https_enabled()
+// Persist the notification ack state.
+//
+// Assigning the notification_acks / notification_acks_fw globals directly and
+// then calling commit() does NOT write anything: ConfigJson::commit() returns
+// early unless its _modified flag is set, and that flag is only raised by
+// deserialize() (or reset()) - never by writing the underlying variable a
+// ConfigOptDefinition wraps. Nothing else in a quiet boot dirties the config,
+// so an ack made that way survives in RAM and is gone at the next restart.
+// Routing the write through deserialize() sets the flag, and only when a value
+// actually changed, so an unchanged ack list still costs no EEPROM write.
+void config_save_notification_acks(const String &acks, const String &fw)
 {
-#ifndef DIVERT_SIM
-  if (www_certificate_id == "") {
-    return false;
+  JsonDocument doc;
+  doc["notification_acks"] = acks;
+  doc["notification_acks_fw"] = fw;
+  if(user_config.deserialize(doc)) {
+    user_config.commit();
   }
-  // This runs from mDNS setup during network bring-up, so a corrupt stored id
-  // would crash-loop the firmware if it were parsed with a throwing conversion.
-  uint64_t cert_id = 0;
-  if (!certificate_id_from_string(www_certificate_id.c_str(), cert_id)) {
-    DBUGF("config_https_enabled: invalid www_certificate_id '%s'", www_certificate_id.c_str());
-    return false;
-  }
+}
 
-  const char *cert = certs.getCertificate(cert_id);
-  const char *key = certs.getKey(cert_id);
-  return (NULL != cert && NULL != key);
-#else
-  return false;
-#endif
+// notification_acks / notification_acks_fw ride the EEPROM-backed opts[]
+// array for load/save, but they are the persisted advisory-ack blob, not a
+// user-facing setting. They are stripped from every public path in both
+// directions: a /config POST, an MQTT config/set or a RAPI config command
+// must not be able to overwrite the ack state, and a /config response or an
+// MQTT config publish must not carry it. config_save_notification_acks() is
+// the one writer and goes to user_config directly.
+//
+// installer_password gets the same treatment: only POST /installer/password,
+// which checks the current password first, may change it, and it is never
+// sent back to the browser (not even masked).
+static void config_strip_internal(JsonDocument &doc)
+{
+  doc.remove("notification_acks");
+  doc.remove("notification_acks_fw");
+  doc.remove("nak");
+  doc.remove("nkv");
+  doc.remove("installer_password");
+  doc.remove("ipw");
+}
+
+const String &config_installer_password()
+{
+  return installer_password;
+}
+
+bool config_installer_password_set(const char *password)
+{
+  // Same route as the ack blob: deserialize() raises the modified flag that
+  // commit() requires, and only when the value really changed.
+  JsonDocument doc;
+  doc["installer_password"] = password;
+  if(user_config.deserialize(doc)) {
+    user_config.commit();
+  }
+  return installer_password == password;
 }
 
 bool config_deserialize(String& json) {
-  return user_config.deserialize(json.c_str());
+  return config_deserialize(json.c_str());
 }
 
 bool config_deserialize(const char *json)
 {
-  return user_config.deserialize(json);
+  // Same capacity ConfigJson::deserialize(const char *) uses, so anything it
+  // could parse still parses here.
+  JsonDocument doc;
+  if(DeserializationError::Code::Ok != deserializeJson(doc, json)) {
+    return false;
+  }
+  config_strip_internal(doc);
+  // True means "parsed", as ConfigJson::deserialize(const char *) reports it,
+  // not "something changed": divert_sim feeds its scenario config through
+  // here and treats false as a malformed file.
+  user_config.deserialize(doc);
+  return true;
 }
 
-bool config_deserialize(DynamicJsonDocument &doc)
+bool config_deserialize(JsonDocument &doc)
 {
+  config_strip_internal(doc);
   bool config_modified = user_config.deserialize(doc);
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
   // Update EVSE config
   // Update the EVSE setting flags, a little low level, may move later
-  if(doc.containsKey("diode_check"))
+  // Presence, not type: isNull() rather than is<T>() so a numeric string or
+  // a float still applies, as it did with v6's containsKey(). An explicit
+  // JSON null is the one case that is now ignored instead of read as 0.
+  if(!doc["diode_check"].isNull())
   {
     bool enable = doc["diode_check"];
     if(enable != evse.isDiodeCheckEnabled()) {
@@ -611,7 +817,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("gfci_check"))
+  if(!doc["gfci_check"].isNull())
   {
     bool enable = doc["gfci_check"];
     if(enable != evse.isGfiTestEnabled()) {
@@ -621,7 +827,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("ground_check"))
+  if(!doc["ground_check"].isNull())
   {
     bool enable = doc["ground_check"];
     if(enable != evse.isGroundCheckEnabled()) {
@@ -631,7 +837,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("relay_check"))
+  if(!doc["relay_check"].isNull())
   {
     bool enable = doc["relay_check"];
     if(enable != evse.isStuckRelayCheckEnabled()) {
@@ -641,7 +847,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("vent_check"))
+  if(!doc["vent_check"].isNull())
   {
     bool enable = doc["vent_check"];
     if(enable != evse.isVentRequiredEnabled()) {
@@ -651,7 +857,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("temp_check"))
+  if(!doc["temp_check"].isNull())
   {
     bool enable = doc["temp_check"];
     if(enable != evse.isTemperatureCheckEnabled()) {
@@ -661,7 +867,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("overcurrent_monitor"))
+  if(!doc["overcurrent_monitor"].isNull())
   {
     bool enable = doc["overcurrent_monitor"];
     if(enable != evse.isOvercurrentMonitorEnabled()) {
@@ -671,7 +877,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("over_temp_shutdown"))
+  if(!doc["over_temp_shutdown"].isNull())
   {
     uint32_t val = doc["over_temp_shutdown"];
     if(val != over_temp_shutdown || val != evse.getPanicTemperature()) {
@@ -682,7 +888,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("voltage"))
+  if(!doc["voltage"].isNull())
   {
     uint32_t val = doc["voltage"];
     if(val > 0) {
@@ -695,7 +901,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("front_button"))
+  if(!doc["front_button"].isNull())
   {
     bool enable = doc["front_button"];
     if(enable != evse.isFrontButtonEnabled()) {
@@ -705,7 +911,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("boot_lock"))
+  if(!doc["boot_lock"].isNull())
   {
     bool enable = doc["boot_lock"];
     if(enable != evse.isBootLockEnabled()) {
@@ -715,7 +921,33 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("pp_auto"))
+  // Skipped entirely once a $S0 write has actually been rejected with $NK:
+  // that means this controller build doesn't have LCD16X2+RGBLCD compiled
+  // in, getLcdType() can never change no matter what's requested, and
+  // retrying on every POST would just re-trigger a config-change
+  // notification for a write that can't take. See the comment on
+  // EvseMonitor::_lcd_type_supported.
+  if(!doc["lcd_type"].isNull() && evse.isLcdTypeSupported())
+  {
+    const char *val = doc["lcd_type"];
+    // ArduinoJson hands back nullptr for a non-string value, so this also
+    // covers {"lcd_type": true}/{"lcd_type": 0} etc. Anything other than
+    // exactly "mono" or "rgb" is ignored rather than silently treated as
+    // RGB - there's no existing precedent for a string-valued EVSE setting
+    // here to inherit a looser convention from.
+    bool isMono = val && 0 == strcmp(val, "mono");
+    bool isRgb  = val && 0 == strcmp(val, "rgb");
+    if(isMono || isRgb) {
+      EvseMonitor::LcdType type = isMono ? EvseMonitor::LcdType::Mono : EvseMonitor::LcdType::RGB;
+      if(type != evse.getLcdType()) {
+        evse.setLcdType(type);
+        config_modified = true;
+        DBUGLN("lcd_type changed");
+      }
+    }
+  }
+
+  if(!doc["pp_auto"].isNull())
   {
     bool enable = doc["pp_auto"];
     if(enable != evse.isPPAutoAmpacityEnabled()) {
@@ -725,7 +957,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("zero_cross"))
+  if(!doc["zero_cross"].isNull())
   {
     bool enable = doc["zero_cross"];
     if(enable != evse.isZeroCrossSwitchEnabled()) {
@@ -735,7 +967,30 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("relay_dc1"))
+#ifdef ENABLE_CABLE_TEMP
+  if(!doc["cable_temp"].isNull())
+  {
+    bool enable = doc["cable_temp"];
+    // isCableTempEnabled() now trusts EvseMonitor's cached commanded value
+    // over its NOT_INSTALLED-inference fallback (see _cable_temp_commanded),
+    // so it no longer misreports "off" immediately after a successful
+    // enable with no source assigned yet - the guard is safe here like it
+    // is for its neighbours, PROVIDED that fallback hasn't actually been
+    // used: a controller that already had the feature on with zero sources
+    // assigned - from before this ESP32 last rebooted, so nothing has been
+    // commanded yet this session - would otherwise still read as (falsely)
+    // off, and an incoming {"cable_temp": false} would then match that false
+    // reading and never actually get sent. isCableTempCommandKnown() is
+    // false in exactly that situation, so send unconditionally then.
+    if(!evse.isCableTempCommandKnown() || enable != evse.isCableTempEnabled()) {
+      evse.enableCableTemp(enable);
+      config_modified = true;
+      DBUGLN("cable_temp changed");
+    }
+  }
+#endif // ENABLE_CABLE_TEMP
+
+  if(!doc["relay_dc1"].isNull())
   {
     bool enable = doc["relay_dc1"];
     if(enable != evse.isDC1RelayEnabled()) {
@@ -745,7 +1000,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("relay_dc2"))
+  if(!doc["relay_dc2"].isNull())
   {
     bool enable = doc["relay_dc2"];
     if(enable != evse.isDC2RelayEnabled()) {
@@ -755,7 +1010,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("relay_ac"))
+  if(!doc["relay_ac"].isNull())
   {
     bool enable = doc["relay_ac"];
     if(enable != evse.isACRelayEnabled()) {
@@ -765,10 +1020,10 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("heartbeat_interval") || doc.containsKey("heartbeat_current"))
+  if(!doc["heartbeat_interval"].isNull() || !doc["heartbeat_current"].isNull())
   {
-    uint32_t interval = doc.containsKey("heartbeat_interval") ? (uint32_t)doc["heartbeat_interval"] : heartbeat_interval_cfg;
-    uint32_t current  = doc.containsKey("heartbeat_current")  ? (uint32_t)doc["heartbeat_current"]  : heartbeat_current_cfg;
+    uint32_t interval = !doc["heartbeat_interval"].isNull() ? (uint32_t)doc["heartbeat_interval"] : heartbeat_interval_cfg;
+    uint32_t current  = !doc["heartbeat_current"].isNull()  ? (uint32_t)doc["heartbeat_current"]  : heartbeat_current_cfg;
     if(interval != evse.getHeartbeatInterval() || current != evse.getHeartbeatCurrent()) {
       heartbeat_interval_cfg = interval;
       heartbeat_current_cfg  = current;
@@ -778,7 +1033,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("service"))
+  if(!doc["service"].isNull())
   {
     // Only L1/L2 are valid; Auto (0, no longer offered) and anything else are
     // ignored so a stale stored value can't put $SL A on the wire.
@@ -794,7 +1049,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("max_current_soft"))
+  if(!doc["max_current_soft"].isNull())
   {
     long current = doc["max_current_soft"];
     if(current != evse.getMaxConfiguredCurrent()) {
@@ -804,7 +1059,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("max_current_hard"))
+  if(!doc["max_current_hard"].isNull())
   {
     // This value can only be written once so we need to check if the value has changed after setting
     long current = doc["max_current_hard"];
@@ -815,7 +1070,7 @@ bool config_deserialize(DynamicJsonDocument &doc)
     }
   }
 
-  if(doc.containsKey("scale") && doc.containsKey("offset"))
+  if(!doc["scale"].isNull() && !doc["offset"].isNull())
   {
     long scale = doc["scale"];
     long offset = doc["offset"];
@@ -846,16 +1101,24 @@ bool config_deserialize(DynamicJsonDocument &doc)
 
 bool config_serialize(String& json, bool longNames, bool compactOutput, bool hideSecrets)
 {
-  return user_config.serialize(json, longNames, compactOutput, hideSecrets);
+  // Same capacity ConfigJson::serialize(String &) uses; the detour through a
+  // document is only so the internal keys can be stripped before rendering.
+  JsonDocument doc;
+  if(!user_config.serialize(doc, longNames, compactOutput, hideSecrets)) {
+    return false;
+  }
+  config_strip_internal(doc);
+  serializeJson(doc, json);
+  return true;
 }
 
-bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
+bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, bool hideSecrets)
 {
   // Static supported protocols
-  JsonArray mqtt_supported_protocols = doc.createNestedArray("mqtt_supported_protocols");
+  JsonArray mqtt_supported_protocols = doc["mqtt_supported_protocols"].to<JsonArray>();
   mqtt_supported_protocols.add("mqtt");
   mqtt_supported_protocols.add("mqtts");
-  JsonArray http_supported_protocols = doc.createNestedArray("http_supported_protocols");
+  JsonArray http_supported_protocols = doc["http_supported_protocols"].to<JsonArray>();
   http_supported_protocols.add("http");
 
   #if ENABLE_CONFIG_CHANGE_NOTIFICATION
@@ -866,8 +1129,13 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   doc["espinfo"] = ESPAL.getChipInfo();
   doc["espflash"] = ESPAL.getFlashChipSize();
   doc["heap_size"] = (uint32_t)ESP.getHeapSize();
-  doc["littlefs_size"] = (uint32_t)LittleFS.totalBytes();
-  doc["littlefs_used"] = (uint32_t)LittleFS.usedBytes();
+  {
+    // Cached: see fs_usage.h for why this must not touch the filesystem here.
+    uint32_t lfs_total, lfs_used;
+    littlefs_usage.get(millis(), lfs_total, lfs_used);
+    doc["littlefs_size"] = lfs_total;
+    doc["littlefs_used"] = lfs_used;
+  }
   {
     const esp_partition_t *p = esp_ota_get_running_partition();
     doc["app0_size"]   = p ? (uint32_t)p->size : 0;
@@ -898,12 +1166,31 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
     }
     doc["front_button"] = evse.isFrontButtonEnabled();
     doc["boot_lock"] = evse.isBootLockEnabled();
+    // 2-line LCD backlight type. Only meaningful on controller builds with a
+    // physical character LCD (LCD16X2 + RGBLCD) - there's no RAPI capability
+    // bit for that, so support is only known once a $S0 write has actually
+    // been tried. Shown by default (nothing has been tried yet, so this is
+    // an optimistic guess, not a confirmed capability) and omitted once a
+    // write has actually come back $NK, so the GUI stops offering a control
+    // that can never take effect on this hardware.
+    if(evse.isLcdTypeSupported()) {
+      doc["lcd_type"] = (EvseMonitor::LcdType::Mono == evse.getLcdType()) ? "mono" : "rgb";
+    }
     // D9-only capability flag so clients can gate the controls below
     doc["d9_support"] = evse.isD9Supported();
     // PP auto-ampacity / zero-cross switching only exist on D9+ controllers
     if(evse.isD9Supported()) {
       doc["pp_auto"] = evse.isPPAutoAmpacityEnabled();
       doc["zero_cross"] = evse.isZeroCrossSwitchEnabled();
+#ifdef ENABLE_CABLE_TEMP
+      // Cable NTC monitoring: just the on/off state here. The per-source
+      // configuration is 20 more fields and this document's capacity is
+      // already noted as nearly exhausted (see handleConfigGet), so it lives
+      // on /cabletemp instead.
+      if(evse.isCableTempKnown()) {
+        doc["cable_temp"] = evse.isCableTempEnabled();
+      }
+#endif // ENABLE_CABLE_TEMP
       // Relay-open current-zero threshold (mA), configurable on the
       // controller via $SZ. Omitted (rather than a sentinel) when the
       // controller hasn't reported one yet.
@@ -955,7 +1242,9 @@ bool config_serialize(DynamicJsonDocument &doc, bool longNames, bool compactOutp
   }
   #endif
 
-  return user_config.serialize(doc, longNames, compactOutput, hideSecrets);
+  bool result = user_config.serialize(doc, longNames, compactOutput, hideSecrets);
+  config_strip_internal(doc);
+  return result;
 }
 
 bool config_set(const char *name, uint32_t val) {
@@ -976,8 +1265,7 @@ bool config_set_opt_string(const char *name, const char *value) {
   // For now, we'll try as string first, then try as integer
 
   // Create a JSON document with the value as a string
-  const size_t capacity = JSON_OBJECT_SIZE(1) +  strlen(value) + strlen(value) + 16;
-  DynamicJsonDocument doc(capacity);
+  JsonDocument doc;
   const String value_str(value);
   // Parse common scalar types from the string
   if(value_str.equalsIgnoreCase("true")) {
@@ -1019,6 +1307,4 @@ void config_reset()
   LittleFS.format();
   config_load_settings();
 }
-
-
 

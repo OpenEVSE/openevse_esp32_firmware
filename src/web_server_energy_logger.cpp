@@ -31,8 +31,7 @@ void handleEnergyRaw(MongooseHttpServerRequest *request)
   }
 
   if (HTTP_GET == request->method()) {
-    const size_t capacity = JSON_ARRAY_SIZE(ENERGY_LOGGER_BUFFER_SIZE) + ENERGY_LOGGER_BUFFER_SIZE * JSON_OBJECT_SIZE(4) + 256;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
 
     char max_buf[8]    = {0};
     char before_buf[12] = {0};
@@ -70,8 +69,7 @@ void handleEnergyDaily(MongooseHttpServerRequest *request)
 
   if (HTTP_GET == request->method()) {
     // Quarterly file: max 92 entries, each with a 10-char date string
-    const size_t capacity = JSON_ARRAY_SIZE(93) + 93 * JSON_OBJECT_SIZE(4) + 93 * 16 + 64;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
 
     char year_buf[6] = {0};
     char qtr_buf[4]  = {0};
@@ -110,8 +108,7 @@ void handleEnergyMonthly(MongooseHttpServerRequest *request)
   }
 
   if (HTTP_GET == request->method()) {
-    const size_t capacity = JSON_ARRAY_SIZE(200) + 200 * JSON_OBJECT_SIZE(4) + 256;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
 
     char year_buf[6] = {0};
     int year = 0;
@@ -142,8 +139,7 @@ void handleEnergyAnnual(MongooseHttpServerRequest *request)
   }
 
   if (HTTP_GET == request->method()) {
-    const size_t capacity = JSON_ARRAY_SIZE(100) + 100 * JSON_OBJECT_SIZE(4) + 256;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
 
     energyLogger.getAnnualMetrics(doc);
 

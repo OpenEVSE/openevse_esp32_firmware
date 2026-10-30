@@ -113,12 +113,12 @@ bool TimeSeries::loadFromJson(JsonVariantConst v,
 
   if (v.is<JsonObjectConst>()) {
     JsonObjectConst obj = v.as<JsonObjectConst>();
-    if (obj.containsKey("value")) {
+    if (obj["value"].is<double>()) {
       _fixed = obj["value"].as<double>();
       _has_fixed = true;
       return true;
     }
-    if (obj.containsKey("csv")) {
+    if (obj["csv"].is<const char *>()) {
       std::string path = obj["csv"].as<const char *>();
       if (!path.empty() && path[0] != '/' && !scenario_dir.empty()) {
         path = scenario_dir + "/" + path;
@@ -129,7 +129,7 @@ bool TimeSeries::loadFromJson(JsonVariantConst v,
       bool skip_header = obj["skip_header"] | true;
       // Allow explicit separator in JSON: "separator": ";".
       char separator = ',';
-      if (obj.containsKey("separator")) {
+      if (obj["separator"].is<const char *>()) {
         const char *sep_str = obj["separator"].as<const char *>();
         if (sep_str && sep_str[0]) separator = sep_str[0];
       }

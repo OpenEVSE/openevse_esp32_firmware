@@ -92,8 +92,13 @@
 #define HAL_SHORT_ID_LENGTH 4
 #endif
 
+// Default NTP server for fresh installs (existing installs keep whatever
+// sntp_hostname they have stored). Cloudflare's anycast service is explicitly
+// free for any client with no registration, unlike pool.ntp.org, whose vendor
+// policy asks products shipping it as a default to apply for a vendor zone
+// (openevse_esp32_firmware#273).
 #ifndef SNTP_DEFAULT_HOST
-#define SNTP_DEFAULT_HOST "pool.ntp.org"
+#define SNTP_DEFAULT_HOST "time.cloudflare.com"
 #endif
 
 #ifndef DEFAULT_TIME_ZONE

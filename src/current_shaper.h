@@ -47,6 +47,7 @@ class CurrentShaperTask: public MicroTasks::Task
   protected:
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
+    void publishShaperEvent();
 
   public:
     CurrentShaperTask();

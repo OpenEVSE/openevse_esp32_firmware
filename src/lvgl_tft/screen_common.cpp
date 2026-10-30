@@ -4,6 +4,7 @@
 #ifdef ENABLE_SCREEN_LVGL_TFT
 
 #include <stdio.h>        // snprintf
+#include <string.h>       // strcmp
 #include "openevse.h"     // OPENEVSE_STATE_*
 #include "nightshift.h"   // NS_* palette macros
 
@@ -47,6 +48,62 @@ int fmt_temp(char *buf, size_t n, float temp_c, bool fahrenheit)
 {
   float t = fahrenheit ? (temp_c * 9.0f / 5.0f + 32.0f) : temp_c;
   return snprintf(buf, n, "%.1f%c  ", t, fahrenheit ? 'F' : 'C');
+}
+
+// --- Write-if-changed wrappers (see screen_common.h for why) ----------------
+
+void ui_set_text(lv_obj_t *label, const char *text)
+{
+  if (NULL == label || NULL == text) return;
+  const char *cur = lv_label_get_text(label);
+  if (NULL != cur && 0 == strcmp(cur, text)) return;
+  lv_label_set_text(label, text);
+}
+
+void ui_set_text_color(lv_obj_t *obj, lv_color_t colour)
+{
+  if (NULL == obj) return;
+  if (lv_obj_get_style_text_color(obj, LV_PART_MAIN).full == colour.full) return;
+  lv_obj_set_style_text_color(obj, colour, 0);
+}
+
+void ui_set_bg_color(lv_obj_t *obj, lv_color_t colour)
+{
+  if (NULL == obj) return;
+  if (lv_obj_get_style_bg_color(obj, LV_PART_MAIN).full == colour.full) return;
+  lv_obj_set_style_bg_color(obj, colour, 0);
+}
+
+void ui_set_arc_color(lv_obj_t *obj, lv_color_t colour, lv_style_selector_t selector)
+{
+  if (NULL == obj) return;
+  if (lv_obj_get_style_arc_color(obj, selector).full == colour.full) return;
+  lv_obj_set_style_arc_color(obj, colour, selector);
+}
+
+void ui_set_font(lv_obj_t *obj, const lv_font_t *font)
+{
+  if (NULL == obj || NULL == font) return;
+  if (lv_obj_get_style_text_font(obj, LV_PART_MAIN) == font) return;
+  lv_obj_set_style_text_font(obj, font, 0);
+}
+
+void ui_set_border_width(lv_obj_t *obj, lv_coord_t width)
+{
+  if (NULL == obj) return;
+  if (lv_obj_get_style_border_width(obj, LV_PART_MAIN) == width) return;
+  lv_obj_set_style_border_width(obj, width, 0);
+}
+
+void ui_set_hidden(lv_obj_t *obj, bool hidden)
+{
+  if (NULL == obj) return;
+  if (lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN) == hidden) return;
+  if (hidden) {
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_HIDDEN);
+  }
 }
 
 #endif // ENABLE_SCREEN_LVGL_TFT

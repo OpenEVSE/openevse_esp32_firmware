@@ -1,11 +1,7 @@
-[submodule "gui-v2"]
-	path = gui-v2
-	url = https://github.com/OpenEVSE/openevse-gui-v2
-	branch = master
 [submodule "gui-nightshift"]
 	path = gui-nightshift
 	url = https://github.com/OpenEVSE/openevse-gui-nightshift
-	branch = RePartition
+	branch = main
 [submodule "migrator"]
 	path = migrator
 	url = https://github.com/RAR/openevse-16mb-migrator

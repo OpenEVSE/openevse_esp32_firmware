@@ -5,6 +5,10 @@ permission friction but a real safety boundary — an agent can build, flash, an
 without either constant prompting or the ability to exfiltrate secrets, reach arbitrary
 hosts, or clobber the host filesystem.
 
+This page is about the **local, opt-in Bash sandbox** for Claude Code running on your own
+machine. Running Claude Code on the web in a **cloud environment** instead? That has its own,
+separate network policy — see [docs/ai/cloud-environment.md](cloud-environment.md).
+
 The sandbox is Claude Code's built-in **Bash sandbox**, which uses OS primitives —
 Seatbelt on macOS, [bubblewrap](https://github.com/containers/bubblewrap) on Linux/WSL2 —
 to confine every Bash command and its children. Native Windows is not supported; use

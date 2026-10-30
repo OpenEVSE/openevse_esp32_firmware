@@ -78,6 +78,13 @@ class TestPeerManagement:
         assert len(pairs) == num_instances
 
         REQUEST_TIMEOUT = 5.0
+        instance_ids = set()
+        for pair in pairs:
+            peers = requests.get(
+                f"{pair['native_url']}/loadsharing/peers", timeout=REQUEST_TIMEOUT
+            ).json()
+            instance_ids.add(next(p["id"] for p in peers if p.get("isLocal")))
+        assert len(instance_ids) == num_instances
 
         # Trigger discovery on all instances
         for pair in pairs:
@@ -88,8 +95,8 @@ class TestPeerManagement:
             )
             assert response.status_code == 200
 
-        # Allow some tolerance: mDNS may take time and may not always work in CI
-        expected_min = max(0, num_instances - 2)
+        # Every firmware instance owns its hostname and DNS-SD responder.
+        expected_min = num_instances - 1
 
         # Poll each instance until expected_min online peers appear or timeout.
         # CI with 4 instances can be slower than the previous fixed 3-second
@@ -131,8 +138,12 @@ class TestPeerManagement:
                 assert response.status_code == 200
                 peers = response.json()
                 assert isinstance(peers, list), f"Expected list, got {type(peers)}"
-                online_peers = [p for p in peers if p.get("online", False)]
-                online_counts[i] = len(online_peers)
+                online_ids = {
+                    p.get("id") for p in peers
+                    if p.get("online", False) and not p.get("isLocal")
+                    and p.get("id") in instance_ids
+                }
+                online_counts[i] = len(online_ids)
                 last_peers[i] = peers
                 if online_counts[i] >= expected_min:
                     remaining.remove(i)

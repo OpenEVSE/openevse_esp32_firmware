@@ -7,13 +7,14 @@ critical workflows. Read it first. Deeper context:
 - [docs/ai/invariants.md](../docs/ai/invariants.md) — rules that must never break
 - [docs/ai/feature-map.md](../docs/ai/feature-map.md) — feature → source → config → API → docs
 - [docs/ai/sandbox.md](../docs/ai/sandbox.md) — running agents in the Bash sandbox (egress allowlist, credential guards)
+- [docs/ai/cloud-environment.md](../docs/ai/cloud-environment.md) — configuring a Claude Code on the web cloud environment (network policy, SessionStart hook)
 - [docs/developer/architecture.md](../docs/developer/architecture.md) — subsystem map and patterns
 
 Essentials, duplicated here for quick reference:
 
-- The default web UI is the **`gui-nightshift`** submodule (not `gui-v2`).
+- The default web UI is the **`gui-nightshift`** submodule.
   Build it before the firmware: `git submodule update --init --recursive &&
-  cd gui-nightshift && npm install && npm run build`.
+  cd gui-nightshift && npm ci && npm run build`.
 - `pio run -e openevse_wifi_v1` builds the default board. First build downloads
   ~500 MB and takes 15–45 minutes — **never cancel**.
 - `src/web_static/` is generated from `gui-nightshift/dist` — never edit by
@@ -21,7 +22,7 @@ Essentials, duplicated here for quick reference:
   bump to submodule commits that are already pushed.
 - After any change: `cd gui-nightshift && npm run build && npm test`, and
   `cd divert_sim && pytest -v` must pass.
-- When a PR changes any user-visible screen (`gui-nightshift`, `gui-v2`,
-  `gui-tft`, `src/lvgl_tft/`), include fresh screenshots of each changed screen
+- When a PR changes any user-visible screen (`gui-nightshift`,
+  `src/lvgl_tft/`), include fresh screenshots of each changed screen
   — for gui-nightshift run `npm run screenshots` and commit the regenerated
   images.

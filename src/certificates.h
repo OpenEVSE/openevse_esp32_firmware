@@ -11,7 +11,13 @@
 class CertificateStore
 {
   public:
-    class Certificate : virtual public JsonSerialize<4096>
+    enum class RemoveResult : uint8_t {
+      Removed,
+      NotFound,
+      Error
+    };
+
+    class Certificate : virtual public JsonSerialize
     {
       public:
         class Type
@@ -111,9 +117,9 @@ class CertificateStore
 
     bool addCertificate(const char *name, const char *cert, const char *key, uint64_t *id = nullptr);
     bool addCertificate(const char *name, const char *cert, uint64_t *id = nullptr);
-    bool addCertificate(DynamicJsonDocument &doc, uint64_t *id = nullptr, bool save = true);
+    bool addCertificate(JsonDocument &doc, uint64_t *id = nullptr, bool save = true);
 
-    bool removeCertificate(uint64_t id);
+    RemoveResult removeCertificate(uint64_t id);
 
     const char *getCertificate(uint64_t id);
     const char *getKey(uint64_t id);
@@ -121,15 +127,15 @@ class CertificateStore
     bool getCertificate(uint64_t id, std::string &certificate);
     bool getKey(uint64_t id, std::string &key);
 
-    bool serializeCertificates(DynamicJsonDocument &doc, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
-    bool serializeCertificate(DynamicJsonDocument &doc, uint64_t id, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
+    bool serializeCertificates(JsonDocument &doc, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
+    bool serializeCertificate(JsonDocument &doc, uint64_t id, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
 
     // Serialising the whole store into one document needs a buffer large
     // enough to hold every PEM body at once. These let a caller emit them one
     // at a time, so the peak allocation is a single certificate rather than
     // the entire store.
     size_t certificateCount();
-    bool serializeCertificateAt(DynamicJsonDocument &doc, size_t index, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
+    bool serializeCertificateAt(JsonDocument &doc, size_t index, uint32_t flags = Certificate::Flags::REDACT_PRIVATE_KEY);
 
   private:
     bool loadCertificates();
@@ -143,7 +149,8 @@ class CertificateStore
     bool findCertificate(uint64_t id, Certificate *&cert);
     bool findCertificate(uint64_t id, int &index);
 
-    bool buildRootCa();
+    bool prepareRootCa(Certificate *additional, Certificate *excluded, const char *&prepared);
+    void replaceRootCa(const char *replacement);
 };
 
 

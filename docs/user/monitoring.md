@@ -1,6 +1,6 @@
 # Monitoring
 
-Live metrics from the charger, grouped into four tabs.
+Live metrics from the charger, grouped into five tabs.
 
 ![Monitoring screen](screenshots/monitoring-dark-desktop.png)
 
@@ -16,6 +16,12 @@ Live metrics from the charger, grouped into four tabs.
 - **Manager** — the claims currently registered on the charger (which
   subsystem is controlling state and current, at what priority) and service
   connection status. Invaluable for answering "*why* is it (not) charging?"
+- **Health** (`#/monitoring/health`) — relay contact wear as reported by the
+  controller: estimated life remaining, cold opens, electrical damage, contact
+  transit drift, thermal index, and stuck-relay recoveries. Blank on a
+  controller that does not report relay health. Relay-wear
+  [notifications](notifications.md) link here rather than repeating the
+  figures; see [relay health](../relay_health.md) for what each one measures.
 
 ## Temperature sensors
 

@@ -41,11 +41,18 @@ extern const char _CONTENT_TYPE_WOFF2[];
 extern const char _CONTENT_TYPE_MANIFEST[];
 #define CONTENT_TYPE_MANIFEST FPSTR(_CONTENT_TYPE_MANIFEST)
 
-extern MongooseHttpServer server;
+extern const char _CONTENT_TYPE_CSV[];
+#define CONTENT_TYPE_CSV FPSTR(_CONTENT_TYPE_CSV)
 
 extern void web_server_setup();
 extern void web_server_loop();
-extern void web_server_load_sharing_setup();
+extern void web_server_load_sharing_setup(MongooseHttpServer &server);
+/** Report whether startup established a primary web listener. */
+extern bool web_server_is_running();
+/** Report TLS only for a successfully started primary listener. */
+extern bool web_server_is_https();
+/** Return the running primary listener port, or zero if startup failed. */
+extern uint16_t web_server_port();
 
 extern void web_server_event(JsonDocument &event);
 
@@ -62,7 +69,25 @@ bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie = null
 
 void dumpRequest(MongooseHttpServerRequest *request);
 
-void handleLogin(MongooseHttpServerRequest *request);
+void handleLogin(MongooseHttpServerRequest *request, bool isHttps = false);
 void handleLogout(MongooseHttpServerRequest *request);
+
+// Shared by the destructive-actuator handlers in web_server.cpp and the
+// notifications ack handler in web_server_notifications.cpp: refuses a
+// bare cross-site GET (see the definition in web_server.cpp for why).
+bool actuatorMethodAllowed(MongooseHttpServerRequest *request,
+                           MongooseHttpServerResponseStream *response);
+
+void handleNotifications(MongooseHttpServerRequest *request);
+void handleNotificationAck(MongooseHttpServerRequest *request);
+
+// Constant-time comparison of two NUL-terminated credentials.
+bool credentialsMatch(const char *a, const char *b);
+
+// Installer tools (web_server_installer.cpp): all POST, GUI-only, behind the
+// normal login plus the installer password.
+void handleInstallerVerify(MongooseHttpServerRequest *request);
+void handleInstallerPassword(MongooseHttpServerRequest *request);
+void handleInstallerMaxCurrent(MongooseHttpServerRequest *request);
 
 #endif // _EMONESP_WEB_SERVER_H

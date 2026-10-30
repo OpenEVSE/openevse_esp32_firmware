@@ -3,16 +3,16 @@
 # (hybrid) environments.
 #
 # SEEDED FROM:
-#   ~/.platformio/packages/framework-arduinoespressif32-libs/esp32/sdkconfig
-#   package esp32-core-3.3.11-libs (arduino-esp32 3.3.11)
-#   (ESP-IDF 5.5.5, platform-espressif32 55.03.311)
+#   framework-arduinoespressif32-esp32-libs/sdkconfig, arduino-esp32 3.3.11
+#   (ESP-IDF 5.5.5), as shipped by the pioarduino platform this file was first
+#   seeded from.
 #
-# This is the same file pioarduino's own write_sdkconfig_file() copies for the
-# prebuilt path (espidf.py:712); copying it verbatim is what makes the hybrid
-# build bit-compatible with the prebuilt Arduino libraries. The Arduino core
-# hard-fails at CMake time without it (it requires CONFIG_FREERTOS_HZ=1000,
-# while bare IDF defaults to 100), so this file is a hard requirement, not a
-# tuning knob.
+# NOT YET RE-SEEDED: the espressif32 8.0.0 platform installs the 3.3.12 libs
+# (ESP-IDF 5.5.5 too), whose sdkconfig differs from this seed in about 70 keys.
+# The hybrid build is green with this seed, so re-seeding is a follow-up, not a
+# blocker. The Arduino core hard-fails at CMake time without a seed (it requires
+# CONFIG_FREERTOS_HZ=1000, while bare IDF defaults to 100), so this file is a
+# hard requirement, not a tuning knob.
 #
 # CHANGED VS THE SEED: nothing inline. The only deltas are appended at the end
 # of this file, under the "PROJECT OVERRIDES" banner — keep it that way so a

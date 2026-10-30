@@ -5,6 +5,7 @@
 #include "emonesp.h"
 #include "debug.h"
 #include "flash_migrate.h"
+#include "ota_url_allow.h"
 
 #if defined(ESP32) && !defined(EPOXY_DUINO)
 
@@ -54,7 +55,6 @@ const char *flash_migrate_partition_scheme()
 #include "web_server.h"
 #include <MongooseHttpClient.h>
 #include <ArduinoJson.h>
-#include <vector>
 #include <string.h>
 
 #include "esp_flash.h"       // esp_flash_* — stream the 16MB app to free flash @0x650000
@@ -68,19 +68,23 @@ const char *flash_migrate_partition_scheme()
 // to ota_1 (0x650000) and OTA a tiny IDF "migrator" app (built with DANGEROUS_
 // WRITE_ALLOWED) into the inactive 4MB OTA slot; on reboot the migrator performs
 // the protected commit. See docs/flash_migrate_repartition.md and
-// https://github.com/OpenEVSE/openevse-16mb-migrator
+// https://github.com/RAR/openevse-16mb-migrator (the `migrator` submodule)
 
-// Default release manifest. Points at this repo's GitHub releases, where the CI
-// (.github/workflows/build.yaml) publishes migrate_v1_16mb.json together with
-// the matching 16MB app/bootloader/migrator binaries. Override with
-// -D MIGRATE_MANIFEST_URL=... per build env if you publish elsewhere.
+// Release manifest. The CI (.github/workflows/build.yaml) publishes
+// migrate_v1_16mb.json next to the 16MB app and migrator it was built from,
+// under the release for the ref being built: the `latest` prerelease for
+// master, the tag's own release for a v* tag. A release build must migrate
+// onto ITS OWN 16MB app, not whatever some older release carried, so
+// scripts/auto_fw_version.py passes -D MIGRATE_MANIFEST_URL for the tag being
+// built and this default only covers builds with no release of their own
+// (local, pull requests), which get the development build.
 //
 // Use the literal-tag form (releases/download/<tag>/...), NOT releases/latest/
 // download/... : the CI marks its builds as prereleases, and GitHub's "latest"
 // redirect never resolves to a prerelease. The asset URLs the CI bakes into the
 // manifest use this same /releases/download/<tag>/ base, so the two agree.
 #ifndef MIGRATE_MANIFEST_URL
-#define MIGRATE_MANIFEST_URL "https://github.com/OpenEVSE/openevse_esp32_firmware/releases/download/vRePartition4MB/migrate_v1_16mb.json"
+#define MIGRATE_MANIFEST_URL "https://github.com/OpenEVSE/openevse_esp32_firmware/releases/download/latest/migrate_v1_16mb.json"
 #endif
 
 // The 16MB app is streamed to ota_1 of the 16MB layout, which is free, unused
@@ -92,6 +96,7 @@ static const uint32_t NEW_APP1_SIZE         = 0x640000;
 // download never reallocates mid-TLS-transfer.
 static const size_t MIGRATE_SCRATCH_CAP     = 4 * 1024;
 static const uint32_t MIGRATE_STALL_MS      = 25000;      // no-progress timeout
+static const uint8_t MIGRATE_MAX_REDIRECTS  = 5;          // per file, like http_update
 
 enum {
   ST_IDLE = 0,
@@ -110,7 +115,13 @@ struct MigrateCtx
   String app_url, migrator_url;
   String app_sha, migrator_sha;
 
-  std::vector<uint8_t> buf;          // buffered download (the manifest JSON)
+  // Buffered download (the manifest JSON). Fixed-size, not a std::vector:
+  // the manifest is always <= MIGRATE_SCRATCH_CAP (enforced below), so there
+  // is no dynamic allocation to fail/fragment/race in the first place --
+  // see the "MIGRATE_SCRATCH_CAP" comment above for why this needs to be
+  // robust to a fragmented heap.
+  uint8_t buf[MIGRATE_SCRATCH_CAP];
+  size_t buf_len = 0;
 
   size_t dl_total = 0;
   size_t dl_pos = 0;
@@ -128,6 +139,7 @@ struct MigrateCtx
   bool body_complete = false;   // current resource fully received
   bool has_redirect = false;    // onResponse saw a 3xx; follow redirect_url
   String redirect_url;
+  uint8_t redirects = 0;        // hops followed for the current file
   bool has_pending = false;     // next file queued
   String pending_url;
   bool failed = false;          // a callback flagged failure; loop reports it
@@ -172,13 +184,14 @@ static void schedule_download(const String &url)
 {
   mctx.pending_url = url;
   mctx.has_pending = true;
+  mctx.redirects = 0;
 }
 
 // ---- helpers ------------------------------------------------------------
 
 static void emit_state(const char *s)
 {
-  StaticJsonDocument<128> e;
+  JsonDocument e;
   e["migrate"] = s;
   web_server_event(e);
   yield();
@@ -190,7 +203,7 @@ static void emit_progress(int percent)
     return;
   }
   mctx.last_percent = percent;
-  StaticJsonDocument<128> e;
+  JsonDocument e;
   e["migrate_progress"] = percent;
   web_server_event(e);
   yield();
@@ -212,7 +225,7 @@ static void migrate_fail(int err, const char *where)
     esp_ota_abort(mctx.ota_handle);
     mctx.ota_handle = 0;
   }
-  StaticJsonDocument<128> e;
+  JsonDocument e;
   e["migrate"] = "failed";
   e["migrate_error"] = err;
   web_server_event(e);
@@ -242,10 +255,16 @@ static bool sha_equals(const uint8_t digest[32], const String &expected_hex)
 // Erase one sector then write `len` bytes (region freshly erased).
 static bool flash_write_sector(uint32_t off, const uint8_t *buf, uint32_t len)
 {
-  if(esp_flash_erase_region(esp_flash_default_chip, off, FLASH_SECTOR) != ESP_OK) {
+  esp_err_t err = esp_flash_erase_region(esp_flash_default_chip, off, FLASH_SECTOR);
+  if(err != ESP_OK) {
+    DEBUG_PORT.printf("[migrate] erase @0x%06x: %s (0x%x), chip size=%u\n", off, esp_err_to_name(err), err, esp_flash_default_chip->size);
+    DBUGF("[migrate] erase @0x%06x: %s (0x%x), chip size=%u", off, esp_err_to_name(err), err, esp_flash_default_chip->size);
     return false;
   }
-  if(esp_flash_write(esp_flash_default_chip, buf, off, len) != ESP_OK) {
+  err = esp_flash_write(esp_flash_default_chip, buf, off, len);
+  if(err != ESP_OK) {
+    DEBUG_PORT.printf("[migrate] write @0x%06x: %s (0x%x)\n", off, esp_err_to_name(err), err);
+    DBUGF("[migrate] write @0x%06x: %s (0x%x)", off, esp_err_to_name(err), err);
     return false;
   }
   return true;
@@ -305,12 +324,14 @@ static bool consume_chunk(const uint8_t *data, size_t len)
   }
   else
   {
-    // Buffered (the manifest JSON). Never reallocate mid-TLS: growing the vector
-    // fragments the heap and can throw bad_alloc -> panic. Reserved up front.
-    if(mctx.buf.size() + len > mctx.buf.capacity()) {
+    // Buffered (the manifest JSON), into the fixed-size scratch buffer -- a
+    // manifest bigger than MIGRATE_SCRATCH_CAP is rejected outright rather
+    // than growing anything.
+    if(mctx.buf_len + len > MIGRATE_SCRATCH_CAP) {
       return false;
     }
-    mctx.buf.insert(mctx.buf.end(), data, data + len);
+    memcpy(mctx.buf + mctx.buf_len, data, len);
+    mctx.buf_len += len;
   }
 
   mctx.dl_pos += len;
@@ -324,6 +345,13 @@ static bool finalize_streamed_image(const String &expected_sha, bool check_app_m
   // App only: flush the final partial sector (padded with 0xFF).
   if(mctx.streaming_app && mctx.sect_fill > 0 && !mctx.dry_run)
   {
+    // Same bound as the full-sector path in consume_chunk(): an image of
+    // NEW_APP1_SIZE + a few bytes gets through there and would land its tail
+    // in the region past the partition.
+    if(mctx.app_flash_off + FLASH_SECTOR > NEW_APP1_OFFSET + NEW_APP1_SIZE) {
+      DEBUG_PORT.println("[migrate] image larger than the target partition");
+      return false;
+    }
     memset(mctx.sect + mctx.sect_fill, 0xFF, FLASH_SECTOR - mctx.sect_fill);
     if(!flash_write_sector(mctx.app_flash_off, mctx.sect, FLASH_SECTOR)) {
       return false;
@@ -345,6 +373,19 @@ static bool finalize_streamed_image(const String &expected_sha, bool check_app_m
     DEBUG_PORT.println("[migrate] image sha mismatch");
     return false;
   }
+  if(check_app_magic && !mctx.dry_run)
+  {
+    // The SHA above is of the stream, not the flash. Read the first byte back
+    // so a write that reported success but never landed is caught here, not
+    // by the migrator after it has been booted into.
+    uint8_t magic = 0;
+    esp_err_t err = esp_flash_read(esp_flash_default_chip, &magic, NEW_APP1_OFFSET, 1);
+    if(err != ESP_OK || magic != 0xE9) {
+      DEBUG_PORT.printf("[migrate] staged image read-back @0x%06x: %s magic=0x%02x\n", NEW_APP1_OFFSET, esp_err_to_name(err), magic);
+      DBUGF("[migrate] staged image read-back @0x%06x: %s magic=0x%02x", NEW_APP1_OFFSET, esp_err_to_name(err), magic);
+      return false;
+    }
+  }
   return true;
 }
 
@@ -354,8 +395,8 @@ static void finalize_current()
   {
     case ST_MANIFEST:
     {
-      StaticJsonDocument<1024> doc;
-      DeserializationError err = deserializeJson(doc, mctx.buf.data(), mctx.buf.size());
+      JsonDocument doc;
+      DeserializationError err = deserializeJson(doc, mctx.buf, mctx.buf_len);
       if(err) {
         migrate_fail(-20, "manifest json");
         return;
@@ -453,7 +494,14 @@ static void start_download(const String &url)
 {
   DBUGF("[migrate] GET %s", url.c_str());
 
-  mctx.buf.clear(); // manifest scratch (kept capacity)
+  // Every fetch goes through here: the manifest, both images, and each
+  // redirect hop. Same host allowlist as http_update.
+  if(!ota_url_host_allowed(url.c_str())) {
+    flag_fail(-15, "url not allowed");
+    return;
+  }
+
+  mctx.buf_len = 0; // manifest scratch reset
   mctx.dl_total = 0;
   mctx.dl_pos = 0;
   mctx.last_dl_pos = 0;
@@ -566,7 +614,7 @@ static void start_download(const String &url)
     current_req = NULL;
   });
 
-  mclient.send(request);
+  request->send();
 }
 
 // Main-loop pump. Drives the whole download/verify/commit sequence so that
@@ -620,6 +668,10 @@ void flash_migrate_loop()
   // No connection open — act on the result of the one that just closed.
   if(mctx.has_redirect) {
     mctx.has_redirect = false;
+    if(++mctx.redirects > MIGRATE_MAX_REDIRECTS) {
+      flag_fail(-16, "too many redirects");
+      return;
+    }
     start_download(mctx.redirect_url); // same state
     return;
   }
@@ -682,7 +734,7 @@ void flash_migrate_coredump_json(JsonDocument &doc)
     doc["task"] = s->exc_task;
     snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_pc);
     doc["pc"] = String(buf);
-    JsonArray bt = doc.createNestedArray("bt");
+    JsonArray bt = doc["bt"].to<JsonArray>();
     for(uint32_t i = 0; i < s->exc_bt_info.depth && i < 16; i++) {
       snprintf(buf, sizeof(buf), "0x%08x", (unsigned)s->exc_bt_info.bt[i]);
       bt.add(String(buf));
@@ -712,21 +764,20 @@ bool flash_migrate_start_16mb(const String &manifest_url, bool dry_run)
   if(!flash_migrate_can_expand_16mb()) {
     return false;
   }
+  // Reject a caller-supplied manifest up front so the HTTP request fails,
+  // rather than starting and failing later over the websocket.
+  if(manifest_url.length() && !ota_url_host_allowed(manifest_url.c_str())) {
+    return false;
+  }
   mctx.dry_run = dry_run;
 
   mctx.app_url = ""; mctx.app_sha = "";
   mctx.migrator_url = ""; mctx.migrator_sha = "";
-  mctx.buf.clear();
-  // Reserve the manifest buffer now, while the heap is unfragmented. Doing this
-  // lazily during a TLS download throws bad_alloc -> panic (the heap is
-  // fragmented by the active mbedTLS connection). bad_alloc is caught so a
-  // genuinely full heap fails cleanly instead of crashing.
-  try {
-    mctx.buf.reserve(MIGRATE_SCRATCH_CAP);
-  } catch(...) {
-    DEBUG_PORT.println("[migrate] could not reserve manifest buffer");
-    return false;
-  }
+  // mctx.buf is a fixed MIGRATE_SCRATCH_CAP-size array (see MigrateCtx), not
+  // a heap allocation -- so unlike the old std::vector::reserve() there is
+  // nothing here that can fail on a fragmented heap, race with a concurrent
+  // allocation, or need catching now exceptions are off (-fno-exceptions).
+  mctx.buf_len = 0;
   mctx.dl_total = 0;
   mctx.dl_pos = 0;
   mctx.last_percent = -1;
@@ -755,6 +806,22 @@ bool flash_migrate_start_16mb(const String &manifest_url, bool dry_run)
   mctx.active = true;
 
   DEBUG_PORT.printf("[migrate] starting 16MB expand, manifest=%s\n", mctx.manifest_url.c_str());
+
+  // esp_flash bounds every erase/write by esp_flash_t::size, which start-up
+  // takes from the bootloader's image header (g_rom_flashchip), not from the
+  // chip. A unit that has only ever been flashed as 4MB carries a 4MB header
+  // there, 0x650000 is past that bound, and the first sector write fails
+  // ESP_ERR_INVALID_ARG before anything reaches the flash. Eligibility has
+  // already established a 16MB part; lift the bound to what is there.
+  {
+    uint32_t phys = 0;
+    if(esp_flash_get_physical_size(esp_flash_default_chip, &phys) == ESP_OK &&
+       phys > esp_flash_default_chip->size)
+    {
+      DBUGF("[migrate] esp_flash size %u -> physical %u", esp_flash_default_chip->size, phys);
+      esp_flash_default_chip->size = phys;
+    }
+  }
   emit_state("staging");
   // The actual GET is launched from flash_migrate_loop() (main-loop context),
   // not here, so no connection is opened from the web request handler.

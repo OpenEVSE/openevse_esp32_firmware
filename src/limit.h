@@ -34,7 +34,7 @@ class LimitType {
     Value _value;
 };
 
-class LimitProperties : virtual public JsonSerialize<512> {
+class LimitProperties : virtual public JsonSerialize {
 	private:
 		LimitType _type;
 		uint32_t  _value;

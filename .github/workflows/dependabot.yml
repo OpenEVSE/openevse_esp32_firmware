@@ -18,6 +18,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: run PlatformIO Dependabot
-        uses: peterus/platformio_dependabot@v1
+        uses: jeremypoulter/platformio_dependabot@6416a66d26eae3860f16231c4ef9c51f9e8cc56b
         with:
           github_token: ${{ secrets.DEPENDABOT_PAT }}

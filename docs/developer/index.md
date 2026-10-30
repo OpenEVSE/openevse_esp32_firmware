@@ -10,7 +10,7 @@
 - [Wired Ethernet](../wired-ethernet.md) — Olimex ESP32-Gateway support
 
 API references: [HTTP](https://openevse.stoplight.io/docs/openevse-wifi-v4/)
-([api.yml](../../api.yml)) · [MQTT](../mqtt.md)
+([api.yml](../../api.yml), [route index](http-api.md)) · [MQTT](../mqtt.md)
 ([developer guide](../Developers_Guide_MQTT.md)) · [RAPI](../rapi.md)
 
 AI coding-agent context: [AGENTS.md](../../AGENTS.md),

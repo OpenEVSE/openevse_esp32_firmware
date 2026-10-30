@@ -48,6 +48,10 @@ extern uint32_t heartbeat_current_cfg;
 #define EVSE_MONITOR_SETTINGS_OFFSET        7
 #endif // !EVSE_MONITOR_SETTINGS_OFFSET
 
+#ifndef EVSE_MONITOR_CABLE_TEMP_MAX_AGE_MS
+#define EVSE_MONITOR_CABLE_TEMP_MAX_AGE_MS  120000UL
+#endif
+
 #ifndef EVSE_HEATBEAT_INTERVAL
 #define EVSE_HEATBEAT_INTERVAL              5
 #endif
@@ -67,7 +71,6 @@ extern uint32_t heartbeat_current_cfg;
 #define EVSE_MONITOR_FAULT_COUNT_BOOT_READY     (1 << 0)
 #define EVSE_MONITOR_FLAGS_BOOT_READY           (1 << 1)
 #define EVSE_MONITOR_CURRENT_BOOT_READY         (1 << 2)
-#define EVSE_MONITOR_ENERGY_BOOT_READY          (1 << 3)
 #define EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY  (1 << 4)
 #define EVSE_MONITOR_SERIAL_BOOT_READY          (1 << 5)
 
@@ -75,7 +78,6 @@ extern uint32_t heartbeat_current_cfg;
         EVSE_MONITOR_FAULT_COUNT_BOOT_READY | \
         EVSE_MONITOR_FLAGS_BOOT_READY | \
         EVSE_MONITOR_CURRENT_BOOT_READY | \
-        EVSE_MONITOR_ENERGY_BOOT_READY | \
         EVSE_MONITOR_CURRENT_SENSOR_BOOT_READY | \
         EVSE_MONITOR_SERIAL_BOOT_READY \
 )
@@ -174,10 +176,20 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _session_complete(EVSE_MONITOR_SESSION_COMPLETE_MASK, EVSE_MONITOR_SESSION_COMPLETE_TRIGGER),
   _count(0),
   _heartbeat(false),
+  _heartbeat_synced(false),
+  _heartbeat_generation(0),
   _firmware_version(""),
+  // A TFT gateway replaces the character LCD, so the controller's $S0 may
+  // well be accepted but sets a backlight type for a panel that isn't there
+#ifdef ENABLE_SCREEN_LVGL_TFT
+  _lcd_type_supported(false),
+#else
+  _lcd_type_supported(true),
+#endif
 #ifdef ENABLE_MCP9808
   _mcp9808(),
 #endif
+  _settings_known(false),
   _settings_changed(),
   _panic_temperature(72),
   _heartbeat_interval(EVSE_HEATBEAT_INTERVAL),
@@ -200,8 +212,28 @@ EvseMonitor::EvseMonitor(OpenEVSEClass &openevse) :
   _relay_thermal_baseline_x100(OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE),
   _relay_thermal_warning_level(0),
   _relay_stuck_recovery_count(0),
-  _relay_recovery_in_flight(false)
+  _relay_recovery_in_flight(false),
+  _relay_recovery_pulse_pending(false)
+#ifdef ENABLE_CABLE_TEMP
+  ,_cable_temp_known(false)
+  ,_cable_temp_last_success(0)
+  ,_cable_temp_commanded_known(false)
+  ,_cable_temp_commanded(false)
+  ,_cable_temp_cfg_known(false)
+#endif // ENABLE_CABLE_TEMP
 {
+#ifdef ENABLE_CABLE_TEMP
+  for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+    _cable_temp_status[i] = OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
+    _cable_temp_cfg_valid[i] = false;
+    _cable_temp_cfg_refresh[i] = 0;
+    _cable_temp_pin[i] = OPENEVSE_CABLE_TEMP_PIN_NONE;
+    _cable_temp_r25[i] = 0;
+    _cable_temp_beta[i] = 0;
+    _cable_temp_offset_c10[i] = 0;
+    _cable_temp_panic_c10[i] = 0;
+  }
+#endif // ENABLE_CABLE_TEMP
 }
 
 EvseMonitor::~EvseMonitor()
@@ -241,7 +273,38 @@ void EvseMonitor::evseBoot(const char *firmware)
   // controller swapped in without an ESP32 reboot, or a non-D9 controller.
   // _relay_health_known itself only ever latches true (readRelayHealth()'s
   // callback simply no-ops when unsupported), so it needs the same reset.
+  // _settings_known latches the same way, and consumers gate real decisions on
+  // it - Notifications will not prune persisted acks until both are true - so
+  // it has to go back to false until this controller has answered $GE, not
+  // keep vouching for the previous one's settings word.
   _relay_health_known = false;
+  _lcd_type_supported = true;
+  _settings_known = false;
+#ifdef ENABLE_CABLE_TEMP
+  _cable_temp_known = false;
+  _cable_temp_last_success = 0;
+  _cable_temp_commanded_known = false;
+  _cable_temp_cfg_known = false;
+  for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+    _cable_temps[i].invalidate();
+    _cable_temp_status[i] = OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
+    _cable_temp_cfg_valid[i] = false;
+    // Supersede any $GN idx reply still in flight from the previous
+    // controller, so it cannot mark this source valid with stale calibration.
+    _cable_temp_cfg_refresh[i]++;
+    _cable_temp_pin[i] = OPENEVSE_CABLE_TEMP_PIN_NONE;
+    // _cable_temp_cfg_known above already keeps these from being served
+    // until a fresh readCableTempConfig() actually fills them back in, but
+    // reset them anyway rather than relying solely on that gate - a swapped
+    // controller shouldn't find its own EEPROM's values sitting in memory
+    // under any circumstance, gated or not. 0 is unambiguous: it isn't a
+    // value any real r25/beta/panic reading takes.
+    _cable_temp_r25[i] = 0;
+    _cable_temp_beta[i] = 0;
+    _cable_temp_offset_c10[i] = 0;
+    _cable_temp_panic_c10[i] = 0;
+  }
+#endif // ENABLE_CABLE_TEMP
   _zero_cross_threshold_ma = OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE;
 
   _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count)
@@ -259,6 +322,7 @@ void EvseMonitor::evseBoot(const char *firmware)
     {
       DBUGF("pilot = %ld, flags = %x", pilot, flags);
       _settings_flags = flags;
+      _settings_known = true;
       _boot_ready.ready(EVSE_MONITOR_FLAGS_BOOT_READY);
     }
   });
@@ -293,24 +357,37 @@ void EvseMonitor::evseBoot(const char *firmware)
     }
   });
 
+  // The missed-pulse acknowledgement is queued here, ahead of the read-only
+  // boot commands below (and specifically ahead of cable-temp's, the largest
+  // block of them). The heartbeat setpoint follows the acknowledgement's reply,
+  // so it queues behind those commands: if the queue is full by then, the
+  // setpoint fails and loop() resends it, leaving supervision unarmed until then.
+#ifndef DISABLE_HEARTBEAT
+  // Send what the user configured, not the compile-time defaults: the
+  // controller keeps its own interval/current in EEPROM across a reboot, so
+  // pushing the defaults here would silently undo a changed current, and
+  // re-arm supervision the user had switched off (interval 0).
+  //
+  // A configured interval of 0 is still sent, as an explicit disable. It is
+  // idempotent (the controller only writes EEPROM when the value differs) and
+  // it is what stops a controller that was left armed - say a disable that
+  // never reached it - from supervising a gateway that has stopped pulsing.
+  _heartbeat_interval = heartbeat_interval_cfg;
+  _heartbeat_current = heartbeat_interval_cfg > 0 ? heartbeat_current_cfg : 0;
+  _heartbeat = false;
+  _heartbeat_synced = false;
+  _heartbeat_generation++;
+  sendHeartbeatConfig();
+#endif
+
   readChipId();
   readRelayStatus();
   readFrequency();
   readRelayHealth();
-
-#ifndef DISABLE_HEARTBEAT
-  _openevse.heartbeatEnable(EVSE_HEATBEAT_INTERVAL, EVSE_HEARTBEAT_CURRENT, [this](int ret, int interval, int current, int triggered) {
-    _heartbeat = RAPI_RESPONSE_OK == ret;
-    // If heartbeat was triggered while WiFi module was rebooting, ack immediately to restore ampacity
-    if (_heartbeat && 2 == triggered) {
-      _openevse.heartbeatPulse([](int ret) {
-        if (RAPI_RESPONSE_OK != ret) {
-          DEBUG_PORT.println("Heartbeat ack failed");
-        }
-      });
-    }
-  });
-#endif
+#ifdef ENABLE_CABLE_TEMP
+  readCableTemperatures();
+  readCableTempConfig();
+#endif // ENABLE_CABLE_TEMP
 }
 
 void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
@@ -385,13 +462,29 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
   DBUG(", _count = ");
   DBUGLN(_count);
 
+#ifdef ENABLE_CABLE_TEMP
+  expireCableTemperatures();
+#endif // ENABLE_CABLE_TEMP
+
   if(_relay_recovery_in_flight) {
     // A stuck-relay recovery ($FK) is in flight and can hold the RAPI queue
     // for up to ~30s on the controller side - every periodic poll below
     // would just enqueue behind it and, once the queue (RAPI_MAX_COMMANDS
     // deep) fills, get RAPI_RESPONSE_QUEUE_FULL, heartbeatPulse() included.
-    // Sit this cycle out rather than starve the queue and risk tripping the
-    // controller's heartbeat-supervision fallback current.
+    // Sit this cycle out rather than starve the queue - except for the
+    // heartbeat pulse, kept to one outstanding at a time. The controller is
+    // blocked in its own loop and cannot answer $SY until $FK returns, so
+    // this does not prevent supervision tripping during a long recovery; what
+    // it does is leave a pulse waiting that the controller services the moment
+    // it is free, rather than the next pulse being up to a poll period away.
+    // A $FK that is NAK'd straight away (an EV is connected) gets its pulses
+    // answered normally.
+    if(_heartbeat && !_relay_recovery_pulse_pending) {
+      _relay_recovery_pulse_pending = true;
+      _openevse.heartbeatPulse([this](int ret) {
+        _relay_recovery_pulse_pending = false;
+      });
+    }
     _count++;
     return EVSE_MONITOR_POLL_TIME;
   }
@@ -411,21 +504,15 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
       }
     });
   }
-  else if(0 == _count % EVSE_MONITOR_STATE_TIME && _heartbeat_interval > 0)
+
+  // Not an else: a failed change keeps pulsing (see sendHeartbeatConfig()) and
+  // must still be retried.
+  if(0 == _count % EVSE_MONITOR_STATE_TIME && !_heartbeat_synced)
   {
-    // Heartbeat enable failed; retry with the configured values so WiFi module
-    // reboot resyncs. Gate on _heartbeat_interval > 0 so an explicit disable
-    // (interval==0) does not get overwritten by the retry.
-    _openevse.heartbeatEnable(_heartbeat_interval, _heartbeat_current, [this](int ret, int interval, int current, int triggered) {
-      _heartbeat = RAPI_RESPONSE_OK == ret;
-      if (_heartbeat && 2 == triggered) {
-        _openevse.heartbeatPulse([](int ret) {
-          if (RAPI_RESPONSE_OK != ret) {
-            DEBUG_PORT.println("Heartbeat ack failed");
-          }
-        });
-      }
-    });
+    // The last heartbeat config was not acknowledged; resend it. This covers an
+    // explicit disable (interval 0) too: one that failed leaves the controller
+    // armed and supervising a gateway that will never pulse.
+    sendHeartbeatConfig();
   }
 
   // Get the EVSE state
@@ -443,6 +530,25 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 
   if(0 == _count % EVSE_MONITOR_TEMP_TIME) {
     getTemperatureFromEvse();
+#ifdef ENABLE_CABLE_TEMP
+    // Cable NTC readings are a safety signal (the controller faults on
+    // over-temperature), so they ride the same cadence as the enclosure
+    // sensors rather than the slower settings poll.
+    readCableTemperatures();
+    // A failed boot-time or targeted configuration read leaves only that
+    // source invalid. Retry invalid sources on this bounded cadence without
+    // hiding successful siblings. Gated on _cable_temp_known - a live $GN has
+    // succeeded, so the controller has the feature - because one without it
+    // NAKs every $GN idx and would otherwise be retried (4 RAPI round trips,
+    // on the busiest tick) forever.
+    if(_count > 0 && _cable_temp_known && !_cable_temp_cfg_known) {
+      for(uint8_t source = 0; source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; source++) {
+        if(!_cable_temp_cfg_valid[source]) {
+          readCableTempConfig(source);
+        }
+      }
+    }
+#endif // ENABLE_CABLE_TEMP
   }
 
   // Offset off zero so this does not land on the same tick as the state and
@@ -471,7 +577,7 @@ bool EvseMonitor::begin(RapiSender &sender)
     {
       // Immediately tell all WebSocket clients we are connected so the GUI
       // banner clears without waiting for the full data-ready chain.
-      StaticJsonDocument<32> connectedEvent;
+      JsonDocument connectedEvent;
       connectedEvent["evse_connected"] = 1;
       event_send(connectedEvent);
 
@@ -615,12 +721,20 @@ void EvseMonitor::setPilot(long amps, bool force, std::function<void(int ret)> c
 
   _openevse.setCurrentCapacity(amps, false, [this, callback](int ret, long pilot)
   {
-    if(RAPI_RESPONSE_OK == ret) {
-      _pilot = pilot;
-      _settings_changed.Trigger();
-      StaticJsonDocument<128> event;
-      event["pilot"] = _pilot;
-      event_send(event);
+    // The controller echoes the capacity it actually applied, on $NK as well
+    // as $OK (it clamps to the EEPROM cap, and refuses raises while over
+    // temperature). Adopt that value either way, and only wake the manager
+    // when it changed: waking on every reply while the controller keeps
+    // answering the same clamp turned into a retry loop at the RAPI
+    // round-trip rate.
+    if((RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret) && pilot > 0) {
+      if(pilot != _pilot) {
+        _pilot = pilot;
+        _settings_changed.Trigger();
+        JsonDocument event;
+        event["pilot"] = _pilot;
+        event_send(event);
+      }
     }
 
     if(callback) {
@@ -698,7 +812,7 @@ void EvseMonitor::updateEffectiveVoltage()
       _power = _power * 3;
     }
 
-    StaticJsonDocument<64> event;
+    JsonDocument event;
     event["voltage"] = _voltage * VOLTS_SCALE_FACTOR;
     event["power"] = _power * POWER_SCALE_FACTOR;
     event_send(event);
@@ -742,6 +856,7 @@ void EvseMonitor::setServiceLevel(ServiceLevel level, std::function<void(int ret
         {
           DBUGF("pilot = %ld, flags = %x", pilot, flags);
           _settings_flags = flags;
+          _settings_known = true;
 
           _openevse.getCurrentCapacity([this, callback](int ret, long min_current, long max_hardware_current, long pilot, long max_configured_current)
           {
@@ -765,6 +880,24 @@ void EvseMonitor::setServiceLevel(ServiceLevel level, std::function<void(int ret
   });
 }
 
+void EvseMonitor::refreshSettingsFlags(std::function<void(int ret)> callback)
+{
+  _openevse.getSettings([this, callback](int ret, long pilot, uint32_t flags)
+  {
+    if(RAPI_RESPONSE_OK == ret) {
+      DBUGF("pilot = %ld, flags = %x", pilot, flags);
+      _settings_flags = flags;
+      _settings_known = true;
+    }
+
+    _settings_changed.Trigger();
+
+    if(callback){
+      callback(ret);
+    }
+  });
+}
+
 void EvseMonitor::enableFeature(uint8_t feature, bool enabled, std::function<void(int ret)> callback)
 {
   _openevse.feature(feature, enabled, [this, callback](int ret)
@@ -772,19 +905,7 @@ void EvseMonitor::enableFeature(uint8_t feature, bool enabled, std::function<voi
     if(RAPI_RESPONSE_OK == ret)
     {
       // Refresh the flags
-      _openevse.getSettings([this, callback](int ret, long pilot, uint32_t flags)
-      {
-        if(RAPI_RESPONSE_OK == ret) {
-          DBUGF("pilot = %ld, flags = %x", pilot, flags);
-          _settings_flags = flags;
-        }
-
-        _settings_changed.Trigger();
-
-        if(callback){
-          callback(ret);
-        }
-      });
+      refreshSettingsFlags(callback);
     } else if(callback){
       callback(ret);
     }
@@ -840,6 +961,38 @@ void EvseMonitor::enableOvercurrentMonitor(bool enabled, std::function<void(int 
   }
 }
 
+void EvseMonitor::setLcdType(LcdType type, std::function<void(int ret)> callback)
+{
+  if(getLcdType() == type) {
+    if(callback) callback(RAPI_RESPONSE_OK);
+    return;
+  }
+
+  uint8_t rapi_type = (LcdType::Mono == type) ? OPENEVSE_LCD_TYPE_MONO : OPENEVSE_LCD_TYPE_RGB;
+  _openevse.setLcdType(rapi_type, [this, callback](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret)
+    {
+      // Refresh the flags
+      refreshSettingsFlags(callback);
+    } else {
+      // A real $NK (as opposed to a timeout/queue-full/disconnected
+      // transport failure, none of which say anything about whether the
+      // controller understands $S0 at all) means this build doesn't have
+      // LCD16X2+RGBLCD compiled in - there's no RAPI capability query for
+      // that, so this is the only way to find out. Latching it stops
+      // app_config.cpp from retrying (and re-triggering a config-change
+      // notification) on every subsequent POST that still carries lcd_type,
+      // since getLcdType() can never change on a controller that rejects
+      // the write that would change it.
+      if(RAPI_RESPONSE_NK == ret) {
+        _lcd_type_supported = false;
+      }
+      if(callback) callback(ret);
+    }
+  });
+}
+
 void EvseMonitor::enableFrontButton(bool enabled, std::function<void(int ret)> callback)
 {
   if(isFrontButtonEnabled() != enabled) {
@@ -862,17 +1015,81 @@ void EvseMonitor::enableBootLock(bool enabled, std::function<void(int ret)> call
   }
 }
 
+// Send a heartbeat supervision setpoint, acknowledging any missed pulse first.
+//
+// Every $SY <interval> <current> clears the controller's trip flag, and only an
+// acknowledgement (or $SY 0) restores ampacity. A setpoint sent while tripped
+// would therefore leave the controller at its fallback current, answering
+// pulses with OK and with nothing left to restore it. $SY 165 is a no-op when
+// nothing is missed, so it is always sent first. The setpoint follows only once
+// the acknowledgement succeeded: if the restore is blocked (say by
+// over-temperature) the trip stays pending for a later attempt.
+//
+// Requests are queued in order, so the acknowledgement always runs before the
+// setpoint. A request superseded while it was waiting is dropped, so an older
+// setpoint cannot overwrite a newer one; the newer request reports its own result.
+void EvseMonitor::sendHeartbeatSetpoint(uint32_t interval, uint32_t current, uint32_t generation, std::function<void(int ret)> callback)
+{
+  if(!_sender) {
+    if(callback) callback(RAPI_RESPONSE_NOT_CONNECTED);
+    return;
+  }
+  _sender->sendCmd("$SY 165", [this, interval, current, generation, callback](int ret) {
+    if(generation != _heartbeat_generation) {
+      return;
+    }
+    if(RAPI_RESPONSE_OK != ret) {
+      if(callback) callback(ret);
+      return;
+    }
+    _openevse.heartbeatEnable(interval, current, [callback](int ret, int i, int c, int triggered) {
+      if(callback) callback(ret);
+    });
+  });
+}
+
+void EvseMonitor::sendHeartbeatConfig()
+{
+  uint32_t interval = _heartbeat_interval;
+  uint32_t generation = _heartbeat_generation;
+  sendHeartbeatSetpoint(interval, _heartbeat_current, generation, [this, interval, generation](int ret) {
+    if(generation != _heartbeat_generation) {
+      return;
+    }
+    updateHeartbeatState(interval, ret);
+  });
+}
+
+// Once the controller has acknowledged a setpoint, pulse only if it is armed.
+// After a failure the controller holds either the old setpoint or the new one,
+// so keep pulsing if either could be armed: a pulse to a disarmed controller is
+// harmless, but missing one trips an armed controller to its fallback current.
+void EvseMonitor::updateHeartbeatState(uint32_t interval, int ret)
+{
+  _heartbeat_synced = RAPI_RESPONSE_OK == ret;
+  _heartbeat = _heartbeat_synced ? interval > 0 : (_heartbeat || interval > 0);
+}
+
 void EvseMonitor::setHeartbeatSupervision(uint32_t interval, uint32_t current, std::function<void(int ret)> callback)
 {
   // Disabling heartbeat (interval==0) must send current=0 so the EVSE falls
   // back to 0 A on any pending missed-pulse condition rather than the
   // configured restricted current.
   uint32_t effective_current = (interval == 0) ? 0 : current;
-  _openevse.heartbeatEnable(interval, effective_current, [this, interval, effective_current, callback](int ret, int i, int c, int t) {
-    if(RAPI_RESPONSE_OK == ret) {
-      _heartbeat_interval = interval;
-      _heartbeat_current = effective_current;
-      _heartbeat = interval > 0;
+
+  // Record what is wanted before it is acknowledged. A request that fails
+  // leaves _heartbeat_synced false, so loop() keeps resending it; and bumping
+  // the generation makes any older request still in flight (a boot config or
+  // a retry carrying the previous values) ignore its response, so it cannot
+  // re-arm a controller that has just been disabled.
+  _heartbeat_interval = interval;
+  _heartbeat_current = effective_current;
+  _heartbeat_synced = false;
+  uint32_t generation = ++_heartbeat_generation;
+
+  sendHeartbeatSetpoint(interval, effective_current, generation, [this, interval, generation, callback](int ret) {
+    if(generation == _heartbeat_generation) {
+      updateHeartbeatState(interval, ret);
     }
     if(callback) callback(ret);
   });
@@ -907,7 +1124,13 @@ void EvseMonitor::setMaxConfiguredCurrent(long amps)
   {
     if(RAPI_RESPONSE_OK == ret)
     {
-      _max_configured_current = amps;
+      // Record what the controller applied, not what was asked for. It
+      // clamps to its own limits and echoes the result; recording `amps`
+      // left the manager targeting a current the controller kept refusing.
+      if(pilot != amps) {
+        DBUGF("Max configured current clamped by controller: asked %ld, got %ld", amps, pilot);
+      }
+      _max_configured_current = pilot;
       DBUGVAR(_max_configured_current);
 
       _pilot = pilot;
@@ -977,7 +1200,15 @@ void EvseMonitor::getSettingsFromEvse()
 {
   _openevse.getSettings([this](int ret, long pilot, uint32_t flags)
   {
-    if(RAPI_RESPONSE_OK == ret && flags != _settings_flags)
+    if(RAPI_RESPONSE_OK != ret) {
+      return;
+    }
+
+    // Latch on any successful answer, not just a changed one: a controller
+    // whose settings never move still has to count as "we have asked".
+    _settings_known = true;
+
+    if(flags != _settings_flags)
     {
       DBUGF("Settings flags changed behind us: %x -> %x", _settings_flags, flags);
       _settings_flags = flags;
@@ -1019,7 +1250,7 @@ void EvseMonitor::getChargeCurrentAndVoltageFromEvse()
           _power = _power * 3;
         }
 
-        StaticJsonDocument<64> event;
+        JsonDocument event;
         event["amp"] = _amp * AMPS_SCALE_FACTOR;;
         event["voltage"] = _voltage * VOLTS_SCALE_FACTOR;
         event["power"] = _power * POWER_SCALE_FACTOR;
@@ -1222,6 +1453,183 @@ void EvseMonitor::readRelayHealth()
     }
   });
 }
+
+#ifdef ENABLE_CABLE_TEMP
+void EvseMonitor::expireCableTemperatures()
+{
+  // Called every loop, before the relay-recovery early return, so cached
+  // readings stop being served once they reach the max age even when polls
+  // are failing, delayed or paused - not only when a failed callback happens
+  // to land after the deadline.
+  if(_cable_temp_known &&
+     (long)(millis() - (_cable_temp_last_success + EVSE_MONITOR_CABLE_TEMP_MAX_AGE_MS)) >= 0) {
+    _cable_temp_known = false;
+    for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+      _cable_temps[i].invalidate();
+      _cable_temp_status[i] = OPENEVSE_CABLE_TEMP_STATUS_NOT_INSTALLED;
+    }
+  }
+}
+
+void EvseMonitor::readCableTemperatures()
+{
+  // $GN - cable NTC thermistor temperatures (requires the controller's
+  // CABLE_TEMPERATURE_MONITORING feature). Not gated on isD9Supported()
+  // here for the same reason as readRelayHealth(): the library already
+  // returns RAPI_RESPONSE_FEATURE_NOT_SUPPORTED on controllers without it,
+  // so the callback simply leaves _cable_temp_known false.
+  _openevse.getCableTemperatures([this](int ret,
+      double ev1, uint8_t ev1_status,
+      double ev2, uint8_t ev2_status,
+      double in1, uint8_t in1_status,
+      double in2, uint8_t in2_status)
+  {
+    if(RAPI_RESPONSE_OK != ret) {
+      return;
+    }
+
+    _cable_temp_known = true;
+    _cable_temp_last_success = millis();
+
+    const double temps[OPENEVSE_CABLE_TEMP_SOURCE_COUNT] = { ev1, ev2, in1, in2 };
+    const uint8_t states[OPENEVSE_CABLE_TEMP_SOURCE_COUNT] = { ev1_status, ev2_status, in1_status, in2_status };
+
+    for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+      _cable_temp_status[i] = states[i];
+      // Only _STATUS_OK carries a real number; the library reports 0 for the
+      // rest, and marking those valid would publish a bogus 0 C to MQTT.
+      if(OPENEVSE_CABLE_TEMP_STATUS_OK == states[i]) {
+        _cable_temps[i].set(temps[i]);
+      } else {
+        _cable_temps[i].invalidate();
+      }
+    }
+
+    DBUGF("cable temps: ev1=%.1f(%u) ev2=%.1f(%u) in1=%.1f(%u) in2=%.1f(%u)",
+          ev1, ev1_status, ev2, ev2_status, in1, in1_status, in2, in2_status);
+  });
+}
+
+void EvseMonitor::readCableTempConfig()
+{
+  // $GN idx, once per source. Each source has its own validity and generation
+  // so a partial failure cannot expose old calibration or hide successful
+  // siblings while retries are in progress.
+  _cable_temp_cfg_known = false;
+  for(uint8_t source = 0; source < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; source++)
+  {
+    readCableTempConfig(source);
+  }
+}
+
+void EvseMonitor::readCableTempConfig(uint8_t source)
+{
+  if(source >= OPENEVSE_CABLE_TEMP_SOURCE_COUNT) {
+    return;
+  }
+
+  _cable_temp_cfg_valid[source] = false;
+  _cable_temp_cfg_known = false;
+  const uint32_t refresh = ++_cable_temp_cfg_refresh[source];
+
+  _openevse.getCableTemperatureConfig(source, [this, source, refresh](int ret, uint8_t pin,
+      uint32_t r25, uint32_t beta, int32_t offset_c10, int32_t panic_c10)
+  {
+    if(refresh != _cable_temp_cfg_refresh[source]) {
+      return;
+    }
+    if(RAPI_RESPONSE_OK != ret) {
+      return;
+    }
+    _cable_temp_pin[source] = pin;
+    _cable_temp_r25[source] = r25;
+    _cable_temp_beta[source] = beta;
+    _cable_temp_offset_c10[source] = offset_c10;
+    _cable_temp_panic_c10[source] = panic_c10;
+    _cable_temp_cfg_valid[source] = true;
+    _cable_temp_cfg_known = true;
+    for(uint8_t i = 0; i < OPENEVSE_CABLE_TEMP_SOURCE_COUNT; i++) {
+      if(!_cable_temp_cfg_valid[i]) {
+        _cable_temp_cfg_known = false;
+        break;
+      }
+    }
+    DBUGF("cable temp cfg %u: pin=%u r25=%u beta=%u offset=%d panic=%d",
+          source, pin, r25, beta, offset_c10, panic_c10);
+  });
+}
+
+void EvseMonitor::enableCableTemp(bool enabled, std::function<void(int ret)> callback)
+{
+  // $FF C, called directly rather than through the shared enableFeature()
+  // helper: that helper's callback actually reports its follow-up $GE's
+  // result once the feature command itself succeeds (its getSettings()
+  // callback shadows the outer `ret`), not the feature command's own result.
+  // A $FF C success trailed by a $GE failure would then look like a
+  // cable_temp failure here - leaving _cable_temp_commanded unset and
+  // skipping the readings refresh below even though the enable itself
+  // worked. Recording the direct result and refreshing settings
+  // independently avoids that.
+  _openevse.feature(OPENEVSE_FEATURE_CABLE_TEMPERATURE, enabled, [this, enabled, callback](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret) {
+      _cable_temp_commanded_known = true;
+      _cable_temp_commanded = enabled;
+      readCableTemperatures();
+    }
+
+    // Refresh settings independently of the above: assigning a source to
+    // PP_READ silently disables PP auto-ampacity, so the flags word can
+    // change under us on a successful enable too, and that refresh
+    // shouldn't be gated on itself the way enableFeature()'s was.
+    _openevse.getSettings([this](int ret, long pilot, uint32_t flags)
+    {
+      if(RAPI_RESPONSE_OK == ret) {
+        _settings_flags = flags;
+        _settings_changed.Trigger();
+      }
+    });
+
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::setCableTempConfig(uint8_t source, uint8_t pin, uint32_t r25, uint32_t beta,
+                                     int32_t offset_c10, int32_t panic_c10,
+                                     std::function<void(int ret)> callback)
+{
+  _openevse.setCableTemperatureConfig(source, pin, r25, beta, offset_c10, panic_c10,
+                                      [this, source, callback](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret) {
+      // Read back rather than trusting the write: the controller clamps
+      // nothing but it *does* silently disable PP auto-ampacity when a source
+      // claims PP_READ, so the settings flags can change under us too. Only
+      // the written source needs re-reading - a single-source write can't
+      // change another source's own configuration (see rapi.md's $SN entry:
+      // sources don't interact with each other, only with PP auto-ampacity).
+      readCableTempConfig(source);
+      readCableTemperatures();
+      getSettingsFromEvse();
+    }
+    if(callback) callback(ret);
+  });
+}
+
+void EvseMonitor::setCableTempPin(uint8_t source, uint8_t pin, std::function<void(int ret)> callback)
+{
+  _openevse.setCableTemperaturePin(source, pin, [this, source, callback](int ret)
+  {
+    if(RAPI_RESPONSE_OK == ret) {
+      readCableTempConfig(source);
+      readCableTemperatures();
+      getSettingsFromEvse();
+    }
+    if(callback) callback(ret);
+  });
+}
+
+#endif // ENABLE_CABLE_TEMP
 
 void EvseMonitor::runStuckRelayRecovery(std::function<void(int ret)> callback)
 {

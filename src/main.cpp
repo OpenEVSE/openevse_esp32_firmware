@@ -55,9 +55,19 @@
 #include "limit.h"
 #include "diagnostics.h"
 #include "boost.h"
+#include "notifications.h"
+#include "shelly_lnm.h"
 
 #if defined(ENABLE_PN532)
 #include "pn532.h"
+#endif
+
+#if defined(ENABLE_RC522)
+#include "rc522.h"
+#endif
+
+#if defined(ENABLE_PN532) && defined(ENABLE_RC522)
+#error "ENABLE_PN532 and ENABLE_RC522 are mutually exclusive — use separate PlatformIO envs"
 #endif
 
 #include "LedManagerTask.h"
@@ -199,12 +209,18 @@ void setup()
   boost.begin(evse);
   DBUGF("After boost.begin: %d", ESPAL.getFreeHeap());
 
+  notifications.begin(evse);
+  DBUGF("After notifications.begin: %d", ESPAL.getFreeHeap());
+
   lcd.begin(evse, scheduler, manual);
   DBUGF("After lcd.begin: %d", ESPAL.getFreeHeap());
 
 #if defined(ENABLE_PN532)
   pn532.begin();
   rfid.begin(evse, pn532);
+#elif defined(ENABLE_RC522)
+  rc522.begin();
+  rfid.begin(evse, rc522);
 #else
   rfid.begin(evse, rfidNullDevice);
 #endif
@@ -217,6 +233,13 @@ void setup()
   net.begin();
   certs.begin();
   DBUGF("After net_setup: %d", ESPAL.getFreeHeap());
+
+  // Mongoose 7 logs at MG_LL_DEBUG to stdout by default, and stdout is UART0:
+  // the RAPI link to the EVSE controller on the OpenEVSE WiFi boards. Send
+  // errors to the debug port instead and drop the rest. Set before begin(),
+  // which already logs.
+  mg_log_set_fn([](char c, void *) { DEBUG_PORT.write(c); }, nullptr);
+  mg_log_set(MG_LL_ERROR);
 
   // Initialise Mongoose networking library
   Mongoose.begin();
@@ -273,6 +296,9 @@ void setup()
   tempThrottle.begin(evse);
   DBUGF("After tempThrottle.begin: %d", ESPAL.getFreeHeap());
 
+  shelly_lnm.begin();
+  DBUGF("After shelly_lnm.begin: %d", ESPAL.getFreeHeap());
+
   lcd.display(F("OpenEVSE WiFI"), 0, 0, 0, LCD_CLEAR_LINE);
   lcd.display(currentfirmware, 0, 1, 5 * 1000, LCD_CLEAR_LINE);
 
@@ -309,19 +335,19 @@ void loop()
   web_server_loop();
   diagnostics_loop();
   flash_migrate_loop();
+#ifdef ENABLE_OTA
   ota_loop();
+#endif
   rapiSender.loop();
 
   Profile_Start(MicroTask);
   MicroTask.update();
   Profile_End(MicroTask, 10);
 
-  // NOTE: the legacy first-connect block (handleRapiRead() + import_timers())
-  // was removed: both call through the sender-less global OpenEVSE object and
-  // have been silent no-ops since the EvseManager refactor.  Reviving
-  // import_timers() would auto-import (and clear) the controller's delay timer
-  // into Charge Manager rules — a deliberate decision for a separate change,
-  // along with routing time_man/input off the dead global.
+  // NOTE: import_timers() was removed from the first-connect block; reviving it
+  // would auto-import (and clear) the controller's delay timer into Charge
+  // Manager rules — a deliberate decision for a separate change.  The clock
+  // read (handleRapiRead) is now driven from EvseManager on boot-ready.
 
   if(net.isConnected())
   {
@@ -332,8 +358,7 @@ void loop()
     if(emoncms_updated)
     {
       // Send the current state to check the config
-      const size_t capacity = JSON_OBJECT_SIZE(33) + 1024;
-      DynamicJsonDocument data(capacity);
+      JsonDocument data;
       create_rapi_json(data);
       emoncms_publish(data);
       emoncms_updated = false;
@@ -362,7 +387,7 @@ void loop()
 
 void event_send(String &json)
 {
-  StaticJsonDocument<512> event;
+  JsonDocument event;
   deserializeJson(event, json);
   event_send(event);
 }
@@ -419,8 +444,7 @@ void handle_serial()
     DBUGVAR(command);
     DBUGVAR(json);
 
-    const size_t capacity = JSON_OBJECT_SIZE(50) + 1024;
-    DynamicJsonDocument doc(capacity);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, json);
     if(error) {
       DEBUG_PORT.println("{\"code\":400,\"msg\":\"Could not parse JSON\"}");
