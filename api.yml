@@ -1067,6 +1067,40 @@ paths:
       operationId: getLoadSharingStatus
       tags:
         - Load Sharing
+  /loadsharing/nonce:
+    get:
+      summary: Get a nonce for a signed peer request
+      description: |
+        Issue a single-use nonce, valid for 15 seconds, for a request between load sharing
+        peers. The peer signs the request with `loadsharing_group_key` and sends
+        `Authorization: OpenEVSE-Peer v1.<nonce>.<mac>`. A signed request reaches only
+        `GET /status`, `GET /config`, `GET /ws`, `POST /loadsharing/peers`, and the load
+        sharing fields of `POST /config`.
+
+        Needs no authentication, because a nonce is useless without the group key.
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - nonce
+                properties:
+                  nonce:
+                    type: string
+                    description: 32 lowercase hex characters
+        '404':
+          description: No `www_password` or no `loadsharing_group_key` is set, so peers need no signature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+      operationId: getLoadSharingNonce
+      tags:
+        - Load Sharing
   /loadsharing/discover:
     post:
       summary: Trigger peer discovery

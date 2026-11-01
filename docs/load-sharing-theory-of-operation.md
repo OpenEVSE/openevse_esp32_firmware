@@ -659,7 +659,8 @@ the basis for test assertions.
 > member is offline, ALL allocations MUST be 0.
 >
 > **INV-5a**: An offline joined member MUST be reported with a machine-readable
-> `error` on `GET /loadsharing/status` (`unreachable`, `connecting`, `stale`),
+> `error` on `GET /loadsharing/status` (`auth_failed`, `unreachable`,
+> `connecting`, `stale`),
 > and an active failsafe MUST carry a `failsafe_reason`.  A group must never
 > derate silently.
 

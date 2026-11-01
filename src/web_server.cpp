@@ -331,6 +331,7 @@ static bool parseBasicAuth(const mg_str &hdr, char *user, size_t userLen,
 // gate (wsAuthorise). Returns true when the request is permitted:
 //  - AP-only provisioning mode (captive portal, before credentials are set), or
 //  - no password configured (auth disabled), or
+//  - a load sharing peer signature, for the routes peers use, or
 //  - a valid Basic Authorization header (machine clients: HA, MQTT, app), or
 //  - a valid session cookie (browser UI).
 // Parsing reuses the library's tested Basic-auth parser; only the comparison is
@@ -347,6 +348,13 @@ bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie, bool 
   // username is set; a set password with a blank username uses a default user
   // (effectiveAdminUser) rather than leaving the device open (F1).
   if(net.isWifiModeApOnly() || www_password == "") {
+    return true;
+  }
+
+  // Load sharing peers. A bad signature deliberately stays out of the shared
+  // throttle: a peer with a stale key retries for as long as it is misconfigured
+  // and must not lock the owner out of the UI.
+  if(loadSharingPeerAuthorised(request)) {
     return true;
   }
 

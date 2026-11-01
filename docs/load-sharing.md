@@ -228,6 +228,8 @@ When `loadsharing_role == true` (member):
   leaving the group on its own (`loadsharing_role: false`), with no other
   `loadsharing_*` keys riding along — see "Group configuration (controller)"
   above. It's all-or-nothing: a rejected request never partially applies.
+- `loadsharing_group_key` is the exception. It is entered on each device, so it
+  stays writable on a member and does not count as a `loadsharing_*` key above.
 - Intended behaviour (theory INV-7): peer management writes on members should
   be rejected. Treat hard HTTP 403 on `/loadsharing/peers` as a target; verify
   against current firmware if relying on it.
@@ -244,6 +246,7 @@ Load-sharing settings also appear on `/config`. Dedicated endpoints:
 | `DELETE` | `/loadsharing/peers` | Returns **501** (not implemented); only the `{host}` form works |
 | `GET` | `/loadsharing/status` | Runtime status + `allocations[]` |
 | `POST` | `/loadsharing/discover` | Trigger mDNS query |
+| `GET` | `/loadsharing/nonce` | Single-use nonce for a signed peer request; no auth, 404 when peers need no signature |
 
 `GET /loadsharing/status` fields: `enabled`, `group_id`, `computed_at`,
 `failsafe_active`, `online_count`, `offline_count`, `peers[]`, `allocations[]`.
@@ -251,6 +254,17 @@ There is no `assigned_limit` / `controller_id` field; read the applied limit
 from the EVSE claim / shaper path.
 
 See `api.yml` for schemas.
+
+## Peer authentication
+
+When `www_password` is set, peers authenticate with a signature made from the
+shared `loadsharing_group_key`, which is entered on every device and never sent.
+A signed request reaches only the routes and config fields load sharing uses; it
+is not an admin credential. A mismatch appears as `error: "auth_failed"` on the
+peer in `GET /loadsharing/status`.
+
+See [load-sharing-peer-auth.md](load-sharing-peer-auth.md) for the design, the
+alternatives considered, and what this does not protect against.
 
 ## Testing
 

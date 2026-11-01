@@ -12,8 +12,10 @@ typedef const __FlashStringHelper *fstr_t;
 #include "espal.h"
 #include "input.h"
 #include "event.h"
+#include "loadsharing_auth.h"
 #include "loadsharing_peer_poller.h"
 #include "loadsharing_types.h"
+#include <ConfigJson.h>
 #include <vector>
 
 extern bool isPositive(MongooseHttpServerRequest *request, const char *param);
@@ -56,9 +58,28 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
   DeserializationError error = deserializeJson(doc, body.c_str(), body.length());
   if(!error)
   {
+    // A peer signature only opens the fields the controller pushes. Without
+    // this the group key would be as good as the admin password, since
+    // /config also sets www_password and the OTA settings. Rewriting the group
+    // key itself is refused too, so a peer cannot lock the others out.
+    if (loadSharingIsPeerRequest(request)) {
+      bool allowed = !request->headers("X-Storage").equals("factory");
+      for (JsonPairConst field : doc.as<JsonObjectConst>()) {
+        allowed = allowed && peer_auth_config_field_allowed(field.key().c_str());
+      }
+      if (!allowed) {
+        response->setCode(403);
+        response->print("{\"msg\":\"Not permitted for load sharing peers\"}");
+        return;
+      }
+    }
+
+    // loadsharing_group_key is left out: it is entered on each device by hand,
+    // so it has to stay writable on a member, and it is never pushed.
     bool loadsharingConfigRequest = false;
     for (JsonPairConst field : doc.as<JsonObjectConst>()) {
-      if (String(field.key().c_str()).startsWith("loadsharing_")) {
+      String key = String(field.key().c_str());
+      if (key.startsWith("loadsharing_") && key != "loadsharing_group_key") {
         loadsharingConfigRequest = true;
         break;
       }
@@ -102,6 +123,15 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
       if (loadsharingConfigRequest && !isControllerPush) {
         response->setCode(403);
         response->print("{\"msg\":\"Load sharing configuration is read-only on members\"}");
+        return;
+      }
+    }
+
+    if (!doc["loadsharing_group_key"].isNull()) {
+      String val = doc["loadsharing_group_key"].as<String>();
+      if (!val.equals(ConfigOptSecret::DUMMY_PASSWORD) && !peer_auth_key_valid(val.c_str())) {
+        response->setCode(400);
+        response->print("{\"msg\":\"loadsharing_group_key must be empty or 16 to 64 characters\"}");
         return;
       }
     }
