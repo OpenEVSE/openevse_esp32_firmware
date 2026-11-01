@@ -37,7 +37,7 @@
 // hardware. LVGL_POOL_IN_PSRAM is set by the env, which knows what is actually
 // on the board.
 #if defined(LVGL_POOL_IN_PSRAM) && !defined(EPOXY_DUINO)
-// Boards with PSRAM (openevse_s3_lcd): take the pool from external RAM and
+// Boards with PSRAM, opted in by their env: take the pool from external RAM and
 // give it room. Only the widget/style/render scratch lives here; the partial
 // draw buffer stays in internal DRAM (lvgl_panel.cpp).
 #undef LV_MEM_SIZE

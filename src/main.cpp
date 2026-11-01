@@ -58,6 +58,7 @@
 #include "temp_throttle.h"
 #include "limit.h"
 #include "diagnostics.h"
+#include "psram.h"
 #include "boost.h"
 #include "notifications.h"
 #include "rapi_activity_led.h"
