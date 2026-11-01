@@ -387,7 +387,10 @@ so it runs in a background task while the logger keeps writing to flash; `/statu
 `energy.log.tmp` and renamed into place only when complete, so a creation cut short
 leaves no ring and the next mount starts again. A ring of the wrong size can then only
 come from a build with a different `SDLOG_CAPACITY`; it is left on the card, not
-deleted, and the logger stays on internal flash until the card is formatted.
+deleted, and the logger stays on internal flash until the card is formatted. The same
+applies to a ring the filesystem can no longer read (seen on a card whose FAT had
+dropped the file's clusters: the open succeeds, every read fails with EIO). In both
+cases `sd_status` reads `log unusable` rather than `mounted`.
 
 A `POST` to `/sdcard/format` wipes the card and re-provisions it (the energy-log ring and
 the config mirror). It answers at once; `sd_status` then reads `formatting`, then

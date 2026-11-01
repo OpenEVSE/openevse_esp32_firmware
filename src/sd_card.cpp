@@ -246,6 +246,8 @@ static void finish_job()
   if(!sdlog_store_begin()) {
     DBUGLN("[sd] fresh ring would not open");
     _ring_gave_up = true;
+  } else {
+    _ring_gave_up = false;   // a format replaces a ring given up on earlier
   }
 }
 
@@ -306,6 +308,11 @@ void sd_card_loop()
       start_job(JOB_CREATE_RING);
       return;
     } else {
+      // A ring that is there but will not open (wrong size, or unreadable) is
+      // left alone, since it may hold history. Say so: "mounted" alone reads
+      // as healthy while every sample is quietly going to internal flash.
+      DBUGLN("[sd] energy log on the card is unusable, logging to internal flash until it is formatted");
+      _status = "log unusable";
       _ring_gave_up = true;
     }
   }

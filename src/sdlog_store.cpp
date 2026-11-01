@@ -5,6 +5,7 @@
 #include <freertos/semphr.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 #include "sdlog_store.h"
 #include <unistd.h>
@@ -186,6 +187,9 @@ bool sdlog_store_begin()
   // asking: the logger stays on internal flash (sd_card_loop() gives up on a
   // ring that exists but will not open) until /sdcard/format.
   if(fseek(_fp, 0, SEEK_END) != 0) {
+    // Seen on a card whose FAT no longer agrees with the directory: the entry
+    // is there, the chain behind it is not (EIO). Nothing in it is readable.
+    DBUGF("[sdlog] ring exists but cannot be read (errno %d) -- format the card to replace it", errno);
     fclose(_fp); _fp = nullptr;
     return false;
   }
