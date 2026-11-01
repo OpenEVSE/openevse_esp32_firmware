@@ -817,15 +817,11 @@ void config_changed(String name)
 #endif
 }
 
-void config_commit(bool factory)
+bool config_commit(bool factory)
 {
   ConfigJson &config = factory ? factory_config : user_config;
   config.set("factory_write_lock", true);
-  if(factory) {
-    config_store_factory();
-  } else {
-    config_store_user();
-  }
+  return factory ? config_store_factory() : config_store_user();
 }
 
 // Persist user config without touching the factory_write_lock flag.
@@ -881,6 +877,7 @@ bool config_installer_password_set(const char *password)
   JsonDocument doc;
   doc["installer_password"] = password;
   if(user_config.deserialize(doc)) {
+    config_release_storage_hold();
     config_store_user();
   }
   return installer_password == password;

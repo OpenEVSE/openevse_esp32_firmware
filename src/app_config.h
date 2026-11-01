@@ -384,7 +384,7 @@ bool config_set_opt_string(const char *name, const char *value);
 bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
 bool config_deserialize(JsonDocument &doc);
-void config_commit(bool factory = false);
+bool config_commit(bool factory = false);  // false if the save was refused or failed
 void config_user_commit();  // persist user config without touching factory_write_lock
 
 // Call before saving a change someone asked for to the user config. Boot-time and
