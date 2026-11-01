@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <map>
 #include <string>
+#include <vector>
 
 #include "config_storage.h"
 
@@ -69,7 +70,8 @@ TEST_CASE("every amount of memory gives a complete record or a refusal") {
 
   int accepted = 0;
   int refused = 0;
-  for(long budget = 0; budget <= 4096; budget += 4) {
+  // Far enough to fit the whole config with 64-bit pointers, not just the ESP32's
+  for(long budget = 0; budget <= 16384; budget += 4) {
     BudgetAllocator heap(budget);
     JsonDocument doc(&heap);
     fillConfig(doc);
@@ -120,6 +122,26 @@ TEST_CASE("the record must fit its region, header included") {
   CHECK(config_record_complete(doc, json, fits));
   CHECK_FALSE(config_record_complete(doc, json, fits - 1));
   CHECK_FALSE(config_record_complete(doc, json, 0));
+}
+
+static bool regionBlank(const std::vector<uint8_t> &region) {
+  return config_region_blank([&](size_t i) { return region[i]; }, region.size());
+}
+
+TEST_CASE("only an erased region counts as blank") {
+  CHECK(regionBlank(std::vector<uint8_t>(3072, 0xff)));
+  CHECK(regionBlank(std::vector<uint8_t>(3072, 0x00)));
+
+  // A header too damaged for load() to recognise, with the settings behind it
+  std::vector<uint8_t> damagedHeader(3072, 0xff);
+  damagedHeader[10] = '"';
+  CHECK_FALSE(regionBlank(damagedHeader));
+  CHECK_FALSE(config_record_present(damagedHeader[0], damagedHeader[1], (char)damagedHeader[2], 4096));
+
+  // The last byte of the region still counts
+  std::vector<uint8_t> lastByte(3072, 0x00);
+  lastByte[3071] = 'x';
+  CHECK_FALSE(regionBlank(lastByte));
 }
 
 TEST_CASE("a stored record is recognised the way ConfigJson::load() does") {

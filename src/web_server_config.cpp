@@ -248,7 +248,9 @@ bool web_server_config_deserialise(JsonDocument &doc, bool factory)
 
   if(config_modified)
   {
-    config_release_storage_hold();
+    if(!factory) {
+      config_release_storage_hold();
+    }
     config_commit(factory);
     DBUGLN("Config updated");
   }

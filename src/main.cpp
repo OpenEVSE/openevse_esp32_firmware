@@ -462,8 +462,11 @@ void handle_serial()
 
       bool config_modified = false;
       if(config_deserialize(doc)) {
-        config_release_storage_hold();
-        config_commit(command == "factory");
+        bool factory = command == "factory";
+        if(!factory) {
+          config_release_storage_hold();
+        }
+        config_commit(factory);
         config_modified = true;
         DBUGLN("Config updated");
       }

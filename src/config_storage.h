@@ -19,6 +19,21 @@ inline bool config_record_present(uint8_t lengthLow, uint8_t lengthHigh, char st
   return 2 <= length && length < storageSize && '{' == start;
 }
 
+// True when a region holds nothing but erased bytes, so there is no record in it
+// to protect. A new EEPROM blob and ResetEEPROM() both fill with 0xff, and blank
+// storage can also read as 0. `readByte` takes an offset into the region.
+template <typename TReadByte>
+bool config_region_blank(TReadByte readByte, size_t size)
+{
+  for(size_t i = 0; i < size; i++) {
+    uint8_t value = readByte(i);
+    if(0x00 != value && 0xff != value) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // True when `json` is a complete rendering of `doc` that fits a record of
 // `recordSize` bytes.
 //

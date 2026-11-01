@@ -532,9 +532,10 @@ ConfigOpt *opts[] =
 ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
 ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FACTORY_OFFSET);
 
-// Set at boot when a stored config exists but can't be read. Defaults are in RAM
-// by then, and saving them would turn what may be a passing fault into permanent
-// loss, so only a deliberate settings change may replace the stored record.
+// Set at boot when a stored user config exists but can't be read. Defaults are in
+// RAM by then, and saving them would turn what may be a passing fault into
+// permanent loss, so only a deliberate settings change may replace that record.
+// The factory record is checked separately at load and isn't covered.
 static bool config_storage_held = false;
 
 // EEPROMClass::begin() reports failure on the device; the simulator's returns void
@@ -555,11 +556,6 @@ static bool config_eeprom_begin()
 // modified flag: EEPROM.commit() doesn't touch flash if no byte changed.
 static bool config_store(ConfigJson &config, size_t offset, size_t size)
 {
-  if(config_storage_held) {
-    DBUGLN("Config not saved: stored config is unreadable");
-    return false;
-  }
-
   JsonDocument doc;
   config.serialize(doc, false, true, false);
   String json;
@@ -590,6 +586,11 @@ static bool config_store(ConfigJson &config, size_t offset, size_t size)
 
 static bool config_store_user()
 {
+  if(config_storage_held) {
+    DBUGLN("Config not saved: stored config is unreadable");
+    return false;
+  }
+
   return config_store(user_config, CONFIG_OFFSET, CONFIG_SIZE);
 }
 
@@ -598,8 +599,10 @@ static bool config_store_factory()
   return config_store(factory_config, FACTORY_OFFSET, FACTORY_SIZE);
 }
 
-// True when the user record exists but can't be parsed, or the EEPROM can't be
-// read at all, in which case ConfigJson::load() would see nothing stored.
+// True when the user record holds something that can't be parsed, or the EEPROM
+// can't be read at all, in which case ConfigJson::load() would see nothing stored.
+// A header too damaged to recognise counts as well: load() can't tell that from
+// an empty region, so anything that isn't blank is treated as a damaged record.
 static bool config_stored_unreadable()
 {
   if(!config_eeprom_begin()) {
@@ -611,6 +614,7 @@ static bool config_stored_unreadable()
   char start = (char)EEPROM.read(CONFIG_OFFSET + CONFIG_RECORD_HEADER_SIZE);
 
   String json;
+  bool blank = false;
   bool present = config_record_present(lengthLow, lengthHigh, start, EEPROM_SIZE);
   if(present) {
     size_t length = lengthLow | ((size_t)lengthHigh << 8);
@@ -618,11 +622,13 @@ static bool config_stored_unreadable()
     for(size_t i = 0; i < length; i++) {
       json += (char)EEPROM.read(CONFIG_OFFSET + CONFIG_RECORD_HEADER_SIZE + i);
     }
+  } else {
+    blank = config_region_blank([](size_t i) { return EEPROM.read(CONFIG_OFFSET + i); }, CONFIG_SIZE);
   }
   EEPROM.end();
 
   if(!present) {
-    return false;
+    return !blank;
   }
 
   JsonDocument doc;
