@@ -54,6 +54,7 @@
 #include "temp_throttle.h"
 #include "limit.h"
 #include "diagnostics.h"
+#include "psram.h"
 #include "boost.h"
 #include "notifications.h"
 #include "shelly_lnm.h"
@@ -147,6 +148,7 @@ void setup()
 #endif
 
   diagnostics_begin();
+  psram_setup();
 
   hardware_setup();
   ESPAL.begin();
