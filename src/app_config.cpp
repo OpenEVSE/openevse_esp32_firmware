@@ -9,6 +9,7 @@
 
 #include "app_config.h"
 #include "app_config_mqtt.h"
+#include "config_storage.h"
 #include "app_config_mode.h"
 #include "temp_throttle.h"
 #include "flash_migrate.h"
@@ -531,6 +532,108 @@ ConfigOpt *opts[] =
 ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
 ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FACTORY_OFFSET);
 
+// Set at boot when a stored config exists but can't be read. Defaults are in RAM
+// by then, and saving them would turn what may be a passing fault into permanent
+// loss, so only a deliberate settings change may replace the stored record.
+static bool config_storage_held = false;
+
+// EEPROMClass::begin() reports failure on the device; the simulator's returns void
+static bool config_eeprom_begin()
+{
+#ifdef EPOXY_DUINO
+  EEPROM.begin(EEPROM_SIZE);
+  return true;
+#else
+  return EEPROM.begin(EEPROM_SIZE);
+#endif
+}
+
+// Used instead of ConfigJson::commit(), which doesn't look at whether rendering
+// the config worked or whether it fits (see config_storage.h). The JSON is built
+// before the EEPROM's 4 KB buffer is taken, so a low heap fails here while the
+// stored record is still untouched. Nothing is lost by skipping commit()'s
+// modified flag: EEPROM.commit() doesn't touch flash if no byte changed.
+static bool config_store(ConfigJson &config, size_t offset, size_t size)
+{
+  if(config_storage_held) {
+    DBUGLN("Config not saved: stored config is unreadable");
+    return false;
+  }
+
+  JsonDocument doc;
+  config.serialize(doc, false, true, false);
+  String json;
+  serializeJson(doc, json);
+
+  if(!config_record_complete(doc, json, size)) {
+    DBUGF("Config not saved: %u of %u bytes rendered, limit %u, overflowed %d",
+          (unsigned)json.length(), (unsigned)measureJson(doc), (unsigned)size, doc.overflowed());
+    return false;
+  }
+
+  if(!config_eeprom_begin()) {
+    DBUGLN("Config not saved: EEPROM unavailable");
+    return false;
+  }
+
+  size_t length = json.length();
+  EEPROM.write(offset + 0, length & 0xff);
+  EEPROM.write(offset + 1, (length >> 8) & 0xff);
+  for(size_t i = 0; i < length; i++) {
+    EEPROM.write(offset + CONFIG_RECORD_HEADER_SIZE + i, json[i]);
+  }
+
+  bool saved = EEPROM.commit();
+  EEPROM.end();
+  return saved;
+}
+
+static bool config_store_user()
+{
+  return config_store(user_config, CONFIG_OFFSET, CONFIG_SIZE);
+}
+
+static bool config_store_factory()
+{
+  return config_store(factory_config, FACTORY_OFFSET, FACTORY_SIZE);
+}
+
+// True when the user record exists but can't be parsed, or the EEPROM can't be
+// read at all, in which case ConfigJson::load() would see nothing stored.
+static bool config_stored_unreadable()
+{
+  if(!config_eeprom_begin()) {
+    return true;
+  }
+
+  uint8_t lengthLow = EEPROM.read(CONFIG_OFFSET + 0);
+  uint8_t lengthHigh = EEPROM.read(CONFIG_OFFSET + 1);
+  char start = (char)EEPROM.read(CONFIG_OFFSET + CONFIG_RECORD_HEADER_SIZE);
+
+  String json;
+  bool present = config_record_present(lengthLow, lengthHigh, start, EEPROM_SIZE);
+  if(present) {
+    size_t length = lengthLow | ((size_t)lengthHigh << 8);
+    json.reserve(length);
+    for(size_t i = 0; i < length; i++) {
+      json += (char)EEPROM.read(CONFIG_OFFSET + CONFIG_RECORD_HEADER_SIZE + i);
+    }
+  }
+  EEPROM.end();
+
+  if(!present) {
+    return false;
+  }
+
+  JsonDocument doc;
+  return DeserializationError::Ok != deserializeJson(doc, json);
+}
+
+void config_release_storage_hold()
+{
+  config_storage_held = false;
+}
+
 // -------------------------------------------------------------------
 // config version handling
 // -------------------------------------------------------------------
@@ -573,6 +676,11 @@ void
 config_load_settings()
 {
   user_config.onChanged(config_changed);
+
+  config_storage_held = config_stored_unreadable();
+  if(config_storage_held) {
+    DBUGLN("Stored config is unreadable, keeping it and running on defaults");
+  }
 
   factory_config.load(false);
   if(!user_config.load(true))
@@ -617,7 +725,7 @@ config_load_settings()
 
     // Save any changes
     if(flagsChanged.set(new_changed)) {
-      user_config.commit();
+      config_store_user();
     }
   }
 
@@ -625,7 +733,7 @@ config_load_settings()
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
 
   // Generate server_secret on first boot (empty after load means the key was
-  // never stored). web_auth_ensure_secret() persists via user_config.commit().
+  // never stored). web_auth_ensure_secret() persists via config_user_commit().
   web_auth_ensure_secret();
 }
 
@@ -707,7 +815,11 @@ void config_commit(bool factory)
 {
   ConfigJson &config = factory ? factory_config : user_config;
   config.set("factory_write_lock", true);
-  config.commit();
+  if(factory) {
+    config_store_factory();
+  } else {
+    config_store_user();
+  }
 }
 
 // Persist user config without touching the factory_write_lock flag.
@@ -715,26 +827,19 @@ void config_commit(bool factory)
 // must not inadvertently lock the factory partition.
 void config_user_commit()
 {
-  user_config.commit();
+  config_store_user();
 }
 
 // Persist the notification ack state.
 //
-// Assigning the notification_acks / notification_acks_fw globals directly and
-// then calling commit() does NOT write anything: ConfigJson::commit() returns
-// early unless its _modified flag is set, and that flag is only raised by
-// deserialize() (or reset()) - never by writing the underlying variable a
-// ConfigOptDefinition wraps. Nothing else in a quiet boot dirties the config,
-// so an ack made that way survives in RAM and is gone at the next restart.
-// Routing the write through deserialize() sets the flag, and only when a value
-// actually changed, so an unchanged ack list still costs no EEPROM write.
+// Routed through deserialize() so an unchanged ack list costs no EEPROM write.
 void config_save_notification_acks(const String &acks, const String &fw)
 {
   JsonDocument doc;
   doc["notification_acks"] = acks;
   doc["notification_acks_fw"] = fw;
   if(user_config.deserialize(doc)) {
-    user_config.commit();
+    config_store_user();
   }
 }
 
@@ -766,12 +871,11 @@ const String &config_installer_password()
 
 bool config_installer_password_set(const char *password)
 {
-  // Same route as the ack blob: deserialize() raises the modified flag that
-  // commit() requires, and only when the value really changed.
+  // Same route as the ack blob: only write when the value really changed.
   JsonDocument doc;
   doc["installer_password"] = password;
   if(user_config.deserialize(doc)) {
-    user_config.commit();
+    config_store_user();
   }
   return installer_password == password;
 }

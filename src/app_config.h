@@ -386,6 +386,10 @@ bool config_deserialize(const char *json);
 bool config_deserialize(JsonDocument &doc);
 void config_commit(bool factory = false);
 void config_user_commit();  // persist user config without touching factory_write_lock
+
+// Call before saving a change someone asked for. Boot-time and background saves
+// stay blocked while a stored config that could not be read is being preserved.
+void config_release_storage_hold();
 // Persist notification_acks / notification_acks_fw. Writing those globals and
 // calling commit() is not enough - see the definition.
 void config_save_notification_acks(const String &acks, const String &fw);
