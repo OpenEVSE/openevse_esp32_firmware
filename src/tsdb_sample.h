@@ -53,3 +53,17 @@ static inline unsigned long tsdb_sample_interval_ms(bool charging, bool on_card)
   }
   return charging ? TSDB_ENERGY_SAMPLE_MS : TSDB_ENERGY_IDLE_SAMPLE_MS;
 }
+
+// One calendar day's rollup inputs from one store: sample count, energy SUM
+// (Wh) and temperature MAX/MIN (deci-degC). temp_max/temp_min mean nothing
+// when count is 0.
+struct EnergyDayAgg {
+  uint32_t count = 0;
+  int64_t  energy_wh = 0;
+  int32_t  temp_max = 0;
+  int32_t  temp_min = 0;
+};
+
+// The day across both stores. Each sample is written to exactly one of them,
+// so counts and sums add; an empty part contributes no extremes.
+EnergyDayAgg energy_day_merge(const EnergyDayAgg &a, const EnergyDayAgg &b);

@@ -46,3 +46,33 @@ TEST_CASE("sample cadence: card gets 6x the resolution of flash") {
   CHECK(tsdb_sample_interval_ms(false, true)  >= tsdb_sample_interval_ms(true, true));
   CHECK(tsdb_sample_interval_ms(false, false) >= tsdb_sample_interval_ms(true, false));
 }
+
+// A day's samples can sit in two stores: flash until the card came up, the card
+// after. Each sample is written to exactly one, so the day is their union.
+TEST_CASE("day rollup merges the two stores") {
+  EnergyDayAgg flash; flash.count = 300; flash.energy_wh = 4000; flash.temp_max = 310; flash.temp_min = 120;
+  EnergyDayAgg card;  card.count  = 900; card.energy_wh  = 6500; card.temp_max  = 280; card.temp_min  = 90;
+
+  EnergyDayAgg day = energy_day_merge(flash, card);
+  CHECK(day.count == 1200);
+  CHECK(day.energy_wh == 10500);
+  CHECK(day.temp_max == 310);
+  CHECK(day.temp_min == 90);
+}
+
+TEST_CASE("day rollup ignores an empty store's extremes") {
+  // An empty part's zero max/min must not leak in: a cold day at -5.0 C stays
+  // at -5.0 C, not 0.
+  EnergyDayAgg empty;
+  EnergyDayAgg card; card.count = 10; card.energy_wh = 50; card.temp_max = -20; card.temp_min = -50;
+
+  EnergyDayAgg a = energy_day_merge(empty, card);
+  EnergyDayAgg b = energy_day_merge(card, empty);
+  for (const EnergyDayAgg &d : {a, b}) {
+    CHECK(d.count == 10);
+    CHECK(d.energy_wh == 50);
+    CHECK(d.temp_max == -20);
+    CHECK(d.temp_min == -50);
+  }
+  CHECK(energy_day_merge(empty, empty).count == 0);
+}

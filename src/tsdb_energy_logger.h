@@ -41,7 +41,8 @@ struct TsdbWriteJob {
 class TsdbEnergyLogger : public MicroTasks::Task {
 private:
   EvseManager *_evse = nullptr;
-  bool         _ready = false;
+  bool         _ready = false;          // internal-flash tsdb open (the handle is valid)
+  bool         _writing = false;        // writer task running: samples are being taken
   int          _init_err = 0;          // esp_err_t from tsdb_init (0 = OK), for /status diag
   double       _last_session_wh = 0;   // for per-sample energy delta
   QueueHandle_t _jobs = nullptr;
@@ -66,11 +67,6 @@ public:
   int  initError() { return _init_err; }   // esp_err_t from tsdb_init (0 = OK)
   uint32_t droppedSamples() { return _dropped; }
 };
-
-// Count records in a range on whichever store currently holds the samples.
-// Same reasoning as energy_aggregate_multi() below: a count against the wrong
-// store reads zero and the caller skips a range that does have data.
-bool energy_query_count_any(uint32_t start_ts, uint32_t end_ts, uint32_t &count);
 
 // Aggregate over whichever store currently holds the samples.
 //

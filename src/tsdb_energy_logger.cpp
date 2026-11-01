@@ -103,31 +103,12 @@ bool TsdbEnergyLogger::start_writer() {
   return true;
 }
 
-bool energy_query_count_any(uint32_t start_ts, uint32_t end_ts, uint32_t &count)
-{
-  count = 0;
 #ifdef ENABLE_SD_CARD
-  if (sdlog_store_ready()) {
-    return sdlog_query_count(start_ts, end_ts, count);
-  }
-#endif
-  if (!tsdbEnergyLogger.isReady()) {
-    return false;
-  }
-  return tsdb_query_count(start_ts, end_ts, &count) == ESP_OK;
-}
-
-bool energy_aggregate_multi(uint32_t start_ts, uint32_t end_ts,
-                            tsdb_agg_request_t *reqs, uint8_t num_reqs,
-                            uint32_t &scanned)
+static bool card_aggregate_multi(uint32_t start_ts, uint32_t end_ts,
+                                 tsdb_agg_request_t *reqs, uint8_t num_reqs,
+                                 uint32_t &scanned)
 {
-  scanned = 0;
-  if (reqs == nullptr || num_reqs == 0) {
-    return false;
-  }
-
-#ifdef ENABLE_SD_CARD
-  if (sdlog_store_ready()) {
+  {
     SdlogAggRequest sreqs[8];
     if (num_reqs > 8) {
       num_reqs = 8;
@@ -154,13 +135,80 @@ bool energy_aggregate_multi(uint32_t start_ts, uint32_t end_ts,
     }
     return true;
   }
+}
 #endif
 
+static bool flash_aggregate_multi(uint32_t start_ts, uint32_t end_ts,
+                                  tsdb_agg_request_t *reqs, uint8_t num_reqs,
+                                  uint32_t &scanned)
+{
   // Guard on isReady(): with a failed tsdb_init the global handle is invalid.
   if (!tsdbEnergyLogger.isReady()) {
     return false;
   }
   return tsdb_aggregate_multi(start_ts, end_ts, reqs, num_reqs, &scanned) == ESP_OK;
+}
+
+bool energy_aggregate_multi(uint32_t start_ts, uint32_t end_ts,
+                            tsdb_agg_request_t *reqs, uint8_t num_reqs,
+                            uint32_t &scanned)
+{
+  scanned = 0;
+  if (reqs == nullptr || num_reqs == 0) {
+    return false;
+  }
+#ifdef ENABLE_SD_CARD
+  if (sdlog_store_ready()) {
+    return card_aggregate_multi(start_ts, end_ts, reqs, num_reqs, scanned);
+  }
+#endif
+  return flash_aggregate_multi(start_ts, end_ts, reqs, num_reqs, scanned);
+}
+
+// One store's share of a day for the rollup. A store with nothing in the
+// window (or whose count query fails, as the single-store rollup treated it)
+// is an empty share; false means it has samples but would not aggregate them.
+static bool day_agg_from(bool card, uint32_t d0, uint32_t d1, EnergyDayAgg &out)
+{
+  out = EnergyDayAgg();
+  uint32_t cnt = 0;
+  bool counted;
+#ifdef ENABLE_SD_CARD
+  if (card) {
+    counted = sdlog_query_count(d0, d1, cnt);
+  } else
+#endif
+  {
+    counted = tsdb_query_count(d0, d1, &cnt) == ESP_OK;
+  }
+  if (!counted || cnt == 0) {
+    return true;
+  }
+
+  tsdb_agg_request_t reqs[3] = {
+    { TSDB_COL_ENERGY, TSDB_AGG_SUM, 0 },
+    { TSDB_COL_TEMP,   TSDB_AGG_MAX, 0 },
+    { TSDB_COL_TEMP,   TSDB_AGG_MIN, 0 },
+  };
+  uint32_t scanned = 0;
+  bool ok;
+#ifdef ENABLE_SD_CARD
+  if (card) {
+    ok = card_aggregate_multi(d0, d1, reqs, 3, scanned);
+  } else
+#endif
+  {
+    (void)card;
+    ok = flash_aggregate_multi(d0, d1, reqs, 3, scanned);
+  }
+  if (!ok || scanned == 0) {
+    return false;
+  }
+  out.count     = cnt;
+  out.energy_wh = reqs[0].result;
+  out.temp_max  = reqs[1].result;
+  out.temp_min  = reqs[2].result;
+  return true;
 }
 
 void TsdbEnergyLogger::writer_task(void *arg) {
@@ -199,7 +247,8 @@ void TsdbEnergyLogger::writer_task(void *arg) {
       }
     }
 #endif
-    if (!logged) {
+    // Only into an open flash store: with tsdb_init failed the handle is invalid.
+    if (!logged && self->_ready) {
       esp_err_t e = tsdb_write(job.ts, job.row);
       if (e != ESP_OK) DBUGF("tsdb_write failed: %d", e);
     }
@@ -210,8 +259,17 @@ void TsdbEnergyLogger::writer_task(void *arg) {
 void TsdbEnergyLogger::begin(EvseManager &evse) { _evse = &evse; MicroTask.startTask(this); }
 
 void TsdbEnergyLogger::setup() {
-  _ready = init_db() && start_writer();
-  if (!_ready && _init_err == 0) {
+  _ready = init_db();
+  // The writer also feeds the card, so on a card-capable board it runs even
+  // when the flash store would not open: a healthy card still takes history.
+  // Elsewhere a failed flash store leaves nothing to write to, as before.
+#ifdef ENABLE_SD_CARD
+  const bool want_writer = true;
+#else
+  const bool want_writer = _ready;
+#endif
+  _writing = want_writer && start_writer();
+  if (want_writer && !_writing) {
     DEBUG_PORT.println("[tsdb] writer task failed: energy history disabled");
   }
   _last_session_wh = _evse ? _evse->getSessionEnergy() : 0;
@@ -256,29 +314,47 @@ void TsdbEnergyLogger::rollup_yesterday() {
   int yday_year  = yday_tm.tm_year + 1900;
   int yday_month = yday_tm.tm_mon  + 1;
 
-  // Check record count cheaply; skip if no data
-  uint32_t cnt = 0;
-  if (!energy_query_count_any(d0u, d1u, cnt) || cnt == 0) {
+  // A day can straddle a store change: samples go to flash until the card
+  // comes up (or after it fails) and to the card otherwise, each to exactly one.
+  // Live reads use the active store only, but the persisted daily total has to
+  // cover both, so ask each store that is open and merge.
+  EnergyDayAgg day;
+  bool any_ok = false;
+  bool any_failed = false;
+#ifdef ENABLE_SD_CARD
+  if (sdlog_store_ready()) {
+    EnergyDayAgg part;
+    if (day_agg_from(true, d0u, d1u, part)) {
+      day = energy_day_merge(day, part);
+      any_ok = true;
+    } else {
+      any_failed = true;
+    }
+  }
+#endif
+  if (isReady()) {
+    EnergyDayAgg part;
+    if (day_agg_from(false, d0u, d1u, part)) {
+      day = energy_day_merge(day, part);
+      any_ok = true;
+    } else {
+      any_failed = true;
+    }
+  }
+  if (any_failed) {
+    // A partial total persisted now would never be corrected; skip the day.
+    DBUGLN("[tsdb rollup] aggregate failed for yesterday");
+    return;
+  }
+  if (!any_ok || day.count == 0) {
     DBUGF("[tsdb rollup] no data for yesterday %04d-%02d-%02d, skipping",
           yday_year, yday_month, yday_tm.tm_mday);
     return;
   }
 
-  // Aggregate: energy SUM (Wh), temp MAX and MIN (deci-degC)
-  tsdb_agg_request_t reqs[3] = {
-    { TSDB_COL_ENERGY, TSDB_AGG_SUM, 0 },
-    { TSDB_COL_TEMP,   TSDB_AGG_MAX, 0 },
-    { TSDB_COL_TEMP,   TSDB_AGG_MIN, 0 },
-  };
-  uint32_t nscanned = 0;
-  if (!energy_aggregate_multi(d0u, d1u, reqs, 3, nscanned) || nscanned == 0) {
-    DBUGLN("[tsdb rollup] aggregate failed for yesterday");
-    return;
-  }
-
-  double energy_wh = (double)reqs[0].result;          // Wh (sum of int16 deltas)
-  double peak_c    = (double)reqs[1].result / 10.0;   // deci-degC → degC
-  double min_c     = (double)reqs[2].result / 10.0;
+  double energy_wh = (double)day.energy_wh;           // Wh (sum of int16 deltas)
+  double peak_c    = (double)day.temp_max / 10.0;     // deci-degC → degC
+  double min_c     = (double)day.temp_min / 10.0;
   double energy_kwh = energy_wh / 1000.0;
 
   DBUGF("[tsdb rollup] yesterday %04d-%02d-%02d: %.1f Wh, pk=%.1f, mn=%.1f",
@@ -400,7 +476,7 @@ unsigned long TsdbEnergyLogger::loop(MicroTasks::WakeReason) {
   // Cadence depends on what we are writing to (card vs flash) and whether a
   // session is running; see tsdb_sample_interval_ms().
   unsigned long next_ms = tsdb_sample_interval_ms(true, false);
-  if (_ready && _evse) {
+  if (_writing && _evse) {
     bool charging = _evse->isCharging();
     next_ms = tsdb_sample_interval_ms(charging, sdlog_store_ready());
 
