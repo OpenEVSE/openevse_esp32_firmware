@@ -125,34 +125,6 @@ OcppTask ocpp = OcppTask();
 static void hardware_setup();
 static void handle_serial();
 
-#if defined(ESP32) && defined(BOARD_HAS_PSRAM) && !defined(CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC)
-#include <esp_heap_caps.h>
-#include <mbedtls/platform.h>
-// The prebuilt core is built with MBEDTLS_INTERNAL_MEM_ALLOC, which pins every
-// mbedTLS allocation (SSL contexts, the 16K/4K record buffers, parsed x509
-// chains) to internal DRAM. MBEDTLS_PLATFORM_MEMORY is also on, so the
-// allocator can be swapped at runtime: prefer PSRAM, fall back to any heap.
-// Must run before the first TLS use; nothing opens TLS before net_setup().
-// The hybrid (arduino, espidf) build sets CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC
-// instead and compiles this out.
-static void *psram_tls_calloc(size_t n, size_t size)
-{
-  return heap_caps_calloc_prefer(n, size, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, MALLOC_CAP_8BIT);
-}
-static void psram_tls_free(void *p)
-{
-  heap_caps_free(p);
-}
-static void psram_setup()
-{
-  if(heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0) {
-    mbedtls_platform_set_calloc_free(psram_tls_calloc, psram_tls_free);
-  }
-}
-#else
-static inline void psram_setup() {}
-#endif
-
 #if defined(EPOXY_DUINO)
 #include "debug.h" // for debug_set_rapi_path
 static void process_command_line();

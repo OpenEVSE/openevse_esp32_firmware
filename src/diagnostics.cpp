@@ -87,12 +87,6 @@ typedef spi_flash_mmap_handle_t diag_mmap_handle_t;
 
 // The transients worth catching are short. Sampling every 5s missed dips that
 // a request burst opens and closes well inside one interval, so sample often;
-// Internal DRAM only. On PSRAM boards MALLOC_CAP_8BIT alone answers with the
-// largest PSRAM block (8 MB on the S3 LCD board), which hides the number that
-// starves lwIP and TLS: the largest *internal* block. Identical on boards
-// without PSRAM.
-#define DIAG_HEAP_CAPS (MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
-
 // heap_caps_get_largest_free_block walks only the free list and is cheap
 // enough at this rate.
 #define DIAG_SAMPLE_INTERVAL 1000
@@ -301,7 +295,7 @@ void diagnostics_status(JsonDocument &doc)
   doc["heap_min"] = (uint32_t)esp_get_minimum_free_heap_size();
   // PSRAM, only on boards that have it, so /status is unchanged elsewhere. The
   // internal figures above deliberately exclude it; these show what the SDK is
-  // routing into external RAM (every allocation >= 4 KB on the S3 LCD board).
+  // routing into external RAM.
   if(heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0) {
     doc["psram_free"] = (uint32_t)heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     doc["psram_largest"] = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
