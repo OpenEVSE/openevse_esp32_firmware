@@ -447,8 +447,13 @@ void EvseMonitor::updateCurrentSettings(long min_current, long max_hardware_curr
   DBUGF("min_current = %ld, pilot = %ld, max_configured_current = %ld, max_hardware_current = %ld", min_current, pilot, max_configured_current, max_hardware_current);
   _min_current = min_current;
   _max_hardware_current = max_hardware_current;
+  bool changed = _pilot != pilot || _max_configured_current != max_configured_current;
   _pilot = pilot;
   _max_configured_current = max_configured_current;
+  if(changed) {
+    // e.g. controller restarted and fell back to its saved max: let EvseManager re-apply its target
+    _settings_changed.Trigger();
+  }
 }
 
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
