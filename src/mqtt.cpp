@@ -543,7 +543,6 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
     DeserializationError error = deserializeJson(doc, payload_str);
     if(!error) {
       if(config_deserialize(doc)) {
-        config_release_storage_hold();
         config_commit(false);
         DBUGLN("Config updated via MQTT");
         // publishConfig() will be called by checkAndPublishUpdates due to configVersion change

@@ -460,14 +460,10 @@ void handle_serial()
         return;
       }
 
-      bool config_modified = false;
-      if(config_deserialize(doc)) {
-        bool factory = command == "factory";
-        if(!factory) {
-          config_release_storage_hold();
-        }
+      bool factory = command == "factory";
+      bool config_modified = config_deserialize(doc) || config_has_unsaved_changes(factory);
+      if(config_modified) {
         config_commit(factory);
-        config_modified = true;
         DBUGLN("Config updated");
       }
       DEBUG_PORT.printf("{\"code\":200,\"msg\":\"%s\"}\n", config_modified ? "done" : "no change");

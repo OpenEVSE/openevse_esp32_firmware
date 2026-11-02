@@ -534,7 +534,8 @@ ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FAC
 
 // Set at boot when a stored user config exists but can't be read. Defaults are in
 // RAM by then, and saving them would turn what may be a passing fault into
-// permanent loss, so only a deliberate settings change may replace that record.
+// permanent loss, so only a successful save of a change someone asked for may
+// replace that record, and that save is what clears this.
 // The factory record is checked separately at load and isn't covered.
 static bool config_storage_held = false;
 
@@ -589,14 +590,17 @@ static bool config_store(ConfigJson &config, size_t offset, size_t size)
   return saved;
 }
 
-static bool config_store_user()
+static bool config_store_user(bool requested = false)
 {
-  if(config_storage_held) {
+  if(config_storage_held && !requested) {
     DBUGLN("Config not saved: stored config is unreadable");
     return false;
   }
 
   config_user_unsaved = !config_store(user_config, CONFIG_OFFSET, CONFIG_SIZE);
+  if(!config_user_unsaved) {
+    config_storage_held = false;
+  }
   return !config_user_unsaved;
 }
 
@@ -640,11 +644,6 @@ static bool config_stored_unreadable()
 
   JsonDocument doc;
   return DeserializationError::Ok != deserializeJson(doc, json);
-}
-
-void config_release_storage_hold()
-{
-  config_storage_held = false;
 }
 
 bool config_has_unsaved_changes(bool factory)
@@ -831,11 +830,24 @@ void config_changed(String name)
 #endif
 }
 
-bool config_commit(bool factory)
+bool config_commit(bool factory, bool requested)
 {
   ConfigJson &config = factory ? factory_config : user_config;
+  uint32_t unlocked_flags = flags;
+  uint32_t unlocked_flags_changed = flags_changed;
   config.set("factory_write_lock", true);
-  return factory ? config_store_factory() : config_store_user();
+  if(!factory) {
+    return config_store_user(requested);
+  }
+
+  // Nothing reached the factory record, so it stays writable and the save can be
+  // retried. Set directly because undoing it through config.set() can need heap.
+  bool saved = config_store_factory();
+  if(!saved) {
+    flags = unlocked_flags;
+    flags_changed = unlocked_flags_changed;
+  }
+  return saved;
 }
 
 // Persist user config without touching the factory_write_lock flag.
@@ -888,19 +900,16 @@ const String &config_installer_password()
 bool config_installer_password_set(const char *password)
 {
   // Same route as the ack blob: only write when the value really changed. A
-  // failed save puts everything back, so the old password stays in force and the
-  // change can simply be tried again.
+  // failed save puts the old password back, so it stays in force and the change
+  // can simply be tried again.
   String previous = installer_password;
-  bool held = config_storage_held;
   bool unsaved = config_user_unsaved;
 
   JsonDocument doc;
   doc["installer_password"] = password;
   if(user_config.deserialize(doc)) {
-    config_release_storage_hold();
-    if(!config_store_user()) {
+    if(!config_store_user(true)) {
       installer_password = previous;
-      config_storage_held = held;
       config_user_unsaved = unsaved;
     }
   }

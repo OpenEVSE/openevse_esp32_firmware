@@ -65,7 +65,6 @@ public:
     void setBool(bool v) override { //OCPP lib calls this to change config
         ocppTask.setSynchronizationLock(true); //avoid that `reconfigure()` will be called
         config_set(keyOpenEvse, (uint32_t) (v ? 1 : 0));
-        config_release_storage_hold();
         config_commit();
         ocppTask.setSynchronizationLock(false);
     }
@@ -73,7 +72,6 @@ public:
     bool setString(const char *v) override { //OCPP lib calls this to change config
         ocppTask.setSynchronizationLock(true); //avoid that `reconfigure()` will be called
         config_set(keyOpenEvse, (String) (v ? v : ""));
-        config_release_storage_hold();
         bool saved = config_commit();
         ocppTask.setSynchronizationLock(false);
         return saved;

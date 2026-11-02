@@ -384,13 +384,11 @@ bool config_set_opt_string(const char *name, const char *value);
 bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
 bool config_deserialize(JsonDocument &doc);
-bool config_commit(bool factory = false);  // false if the save was refused or failed
+// False if the save was refused or failed. `requested` says someone asked for this
+// change: only then may a user save replace a stored config that could not be read.
+// Boot-time and background saves pass false, and stay blocked while it is preserved.
+bool config_commit(bool factory = false, bool requested = true);
 void config_user_commit();  // persist user config without touching factory_write_lock
-
-// Call before saving a change someone asked for to the user config. Boot-time and
-// background saves stay blocked while a stored user config that could not be read
-// is being preserved. Factory saves don't touch that record and must not call this.
-void config_release_storage_hold();
 
 // True when a save of this record failed and nothing has stored its settings since
 bool config_has_unsaved_changes(bool factory);
