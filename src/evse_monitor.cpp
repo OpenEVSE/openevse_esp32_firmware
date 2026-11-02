@@ -7,6 +7,33 @@
 #include "emonesp.h"
 #include "evse_monitor.h"
 
+// Commands bootRead() queues directly (each counted where it is issued there):
+// 5 core reads + heartbeat config + 4 info reads (+ 5 cable-temperature reads).
+// Feature-gated reads that skip sending (e.g. $GZ on a pre-D9 controller) only
+// make the real number smaller, so this is an upper bound.
+#define EVSE_BOOT_READ_CORE_COMMANDS 5
+#ifndef DISABLE_HEARTBEAT
+#define EVSE_BOOT_READ_HEARTBEAT_COMMANDS 1
+#else
+#define EVSE_BOOT_READ_HEARTBEAT_COMMANDS 0
+#endif
+#define EVSE_BOOT_READ_INFO_COMMANDS 4
+#ifdef ENABLE_CABLE_TEMP
+#define EVSE_BOOT_READ_CABLE_TEMP_COMMANDS (1 + OPENEVSE_CABLE_TEMP_SOURCE_COUNT)
+#else
+#define EVSE_BOOT_READ_CABLE_TEMP_COMMANDS 0
+#endif
+#define EVSE_BOOT_READ_COMMANDS (EVSE_BOOT_READ_CORE_COMMANDS + \
+                                 EVSE_BOOT_READ_HEARTBEAT_COMMANDS + \
+                                 EVSE_BOOT_READ_INFO_COMMANDS + \
+                                 EVSE_BOOT_READ_CABLE_TEMP_COMMANDS)
+static_assert(EVSE_BOOT_READ_COMMANDS <= RapiSender::queueCapacity(),
+              "boot reads do not fit in the RAPI queue; raise RAPI_MAX_COMMANDS");
+// Ordinary commands allowed to wait during the post-restart hold: whatever the
+// boot reads leave free. Never negative (asserted above); RapiSender clamps it
+// to the queue size as well.
+#define EVSE_BOOT_HOLD_MAX_QUEUED (RapiSender::queueCapacity() - EVSE_BOOT_READ_COMMANDS)
+
 #ifndef EVSE_BOOT_READ_DELAY_MS
 #define EVSE_BOOT_READ_DELAY_MS 1000
 #endif
@@ -318,7 +345,7 @@ void EvseMonitor::evseBoot(const char *firmware)
   // Hold every command from any source (EvseManager, scheduler, MQTT/HTTP,
   // RAPI pass-through) for the same window; they queue and go out in order.
   if(_sender) {
-    _sender->holdSend(EVSE_BOOT_READ_DELAY_MS);
+    _sender->holdSend(EVSE_BOOT_READ_DELAY_MS, EVSE_BOOT_HOLD_MAX_QUEUED);
   }
   MicroTask.wakeTask(this);
 }
@@ -333,6 +360,7 @@ void EvseMonitor::bootRead()
   if(_sender) {
     _sender->setPriority(true);
   }
+  // EVSE_BOOT_READ_CORE_COMMANDS: $GF, $GE, $GC, $GA, $GI
   _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count)
   {
     if(RAPI_RESPONSE_OK == ret)
@@ -406,11 +434,13 @@ void EvseMonitor::bootRead()
   sendHeartbeatConfig();
 #endif
 
+  // EVSE_BOOT_READ_INFO_COMMANDS: $GI, relay status, $GZ, $GL
   readChipId();
   readRelayStatus();
   readFrequency();
   readRelayHealth();
 #ifdef ENABLE_CABLE_TEMP
+  // EVSE_BOOT_READ_CABLE_TEMP_COMMANDS: $GN + $GN idx per source
   readCableTemperatures();
   readCableTempConfig();
 #endif // ENABLE_CABLE_TEMP
