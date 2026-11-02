@@ -74,9 +74,9 @@ public:
         ocppTask.setSynchronizationLock(true); //avoid that `reconfigure()` will be called
         config_set(keyOpenEvse, (String) (v ? v : ""));
         config_release_storage_hold();
-        config_commit();
+        bool saved = config_commit();
         ocppTask.setSynchronizationLock(false);
-        return true;
+        return saved;
     }
 
     bool getBool() override {
