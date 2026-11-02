@@ -391,6 +391,9 @@ void config_user_commit();  // persist user config without touching factory_writ
 // background saves stay blocked while a stored user config that could not be read
 // is being preserved. Factory saves don't touch that record and must not call this.
 void config_release_storage_hold();
+
+// True when a save of this record failed and nothing has stored its settings since
+bool config_has_unsaved_changes(bool factory);
 // Persist notification_acks / notification_acks_fw. Writing those globals and
 // calling commit() is not enough - see the definition.
 void config_save_notification_acks(const String &acks, const String &fw);

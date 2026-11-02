@@ -174,7 +174,9 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
 
     // Update WiFi module config
     MongooseString storage = request->headers("X-Storage");
-    if(storage.equals("factory") && config_factory_write_lock())
+    // config_commit() sets the lock before saving, so a factory save that failed
+    // must not lock out its own retry.
+    if(storage.equals("factory") && config_factory_write_lock() && !config_has_unsaved_changes(true))
     {
       response->setCode(423);
       response->print("{\"msg\":\"Factory settings locked\"}");
@@ -243,11 +245,12 @@ void handleConfig(MongooseHttpServerRequest *request)
   request->send(response);
 }
 
-// Returns whether the config changed. `saved` is only cleared when a change could
-// not be stored; the change is still live in RAM then.
+// Returns whether the config changed or an earlier failed save was stored by this
+// call. `saved` is only cleared when the settings could not be stored; a change is
+// still live in RAM then, so the next call tries again even if nothing differs.
 bool web_server_config_deserialise(JsonDocument &doc, bool factory, bool *saved)
 {
-  bool config_modified = config_deserialize(doc);
+  bool config_modified = config_deserialize(doc) || config_has_unsaved_changes(factory);
 
   if(config_modified)
   {

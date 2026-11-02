@@ -538,6 +538,11 @@ ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FAC
 // The factory record is checked separately at load and isn't covered.
 static bool config_storage_held = false;
 
+// Set when a save failed, so RAM holds settings the record doesn't. A retry of the
+// same request changes nothing in RAM and would otherwise never reach storage.
+static bool config_user_unsaved = false;
+static bool config_factory_unsaved = false;
+
 // EEPROMClass::begin() reports failure on the device; the simulator's returns void
 static bool config_eeprom_begin()
 {
@@ -591,12 +596,14 @@ static bool config_store_user()
     return false;
   }
 
-  return config_store(user_config, CONFIG_OFFSET, CONFIG_SIZE);
+  config_user_unsaved = !config_store(user_config, CONFIG_OFFSET, CONFIG_SIZE);
+  return !config_user_unsaved;
 }
 
 static bool config_store_factory()
 {
-  return config_store(factory_config, FACTORY_OFFSET, FACTORY_SIZE);
+  config_factory_unsaved = !config_store(factory_config, FACTORY_OFFSET, FACTORY_SIZE);
+  return !config_factory_unsaved;
 }
 
 // True when the user record holds something that can't be parsed, or the EEPROM
@@ -638,6 +645,11 @@ static bool config_stored_unreadable()
 void config_release_storage_hold()
 {
   config_storage_held = false;
+}
+
+bool config_has_unsaved_changes(bool factory)
+{
+  return factory ? config_factory_unsaved : config_user_unsaved;
 }
 
 // -------------------------------------------------------------------
@@ -683,6 +695,8 @@ config_load_settings()
 {
   user_config.onChanged(config_changed);
 
+  config_user_unsaved = false;
+  config_factory_unsaved = false;
   config_storage_held = config_stored_unreadable();
   if(config_storage_held) {
     DBUGLN("Stored config is unreadable, keeping it and running on defaults");
@@ -873,12 +887,22 @@ const String &config_installer_password()
 
 bool config_installer_password_set(const char *password)
 {
-  // Same route as the ack blob: only write when the value really changed.
+  // Same route as the ack blob: only write when the value really changed. A
+  // failed save puts everything back, so the old password stays in force and the
+  // change can simply be tried again.
+  String previous = installer_password;
+  bool held = config_storage_held;
+  bool unsaved = config_user_unsaved;
+
   JsonDocument doc;
   doc["installer_password"] = password;
   if(user_config.deserialize(doc)) {
     config_release_storage_hold();
-    config_store_user();
+    if(!config_store_user()) {
+      installer_password = previous;
+      config_storage_held = held;
+      config_user_unsaved = unsaved;
+    }
   }
   return installer_password == password;
 }
