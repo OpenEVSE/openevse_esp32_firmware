@@ -246,6 +246,16 @@ class EvseManager : public MicroTasks::Task
     bool _evaluateTargetState;
     bool _forcePilot;
 
+    // A forced pilot (external current command) stays pending until the
+    // controller answers it. A failed send is retried at most
+    // EVSE_FORCE_PILOT_RETRIES times, EVSE_FORCE_PILOT_RETRY_MS apart.
+    // _forcePilotGen bumps on every new forced command so a newer target
+    // replaces a pending one rather than queueing behind it.
+    bool _forcePilotInFlight = false;
+    uint8_t _forcePilotRetries = 0;
+    uint32_t _forcePilotGen = 0;
+    unsigned long _forcePilotRetryAt = 0;
+
     // Retry interval while the EVSE module has not answered yet: starts at
     // 1 s and doubles to 10 s, so a probe lost during boot costs a second
     // rather than the full steady-state interval.

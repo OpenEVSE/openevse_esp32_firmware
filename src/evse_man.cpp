@@ -6,6 +6,13 @@
 
 #include "evse_man.h"
 
+#ifndef EVSE_FORCE_PILOT_RETRIES
+#define EVSE_FORCE_PILOT_RETRIES 2
+#endif
+#ifndef EVSE_FORCE_PILOT_RETRY_MS
+#define EVSE_FORCE_PILOT_RETRY_MS 2000
+#endif
+
 #include <algorithm>
 
 #define EVSE_CONNECT_RETRY_MIN_MS   1000
@@ -296,12 +303,40 @@ bool EvseManager::setTargetState(EvseProperties &target)
   }
   DBUGVAR(charge_current);
 
-  bool force = _forcePilot;
-  _forcePilot = false;
-  if(force || charge_current != _monitor.getPilot())
+  if(_forcePilot && !_forcePilotInFlight &&
+     (long)(millis() - _forcePilotRetryAt) >= 0)
+  {
+    DBUGF("Set pilot to %d (forced)", charge_current);
+    _forcePilotInFlight = true;
+    uint32_t gen = _forcePilotGen;
+    _monitor.setPilot(charge_current, true, [this, gen](int ret)
+    {
+      _forcePilotInFlight = false;
+      if(gen != _forcePilotGen) {
+        // A newer forced target arrived while this one was in flight
+        MicroTask.wakeTask(this);
+        return;
+      }
+      if(RAPI_RESPONSE_OK == ret || RAPI_RESPONSE_NK == ret) {
+        // The controller answered; NK means it clamped/refused, which a
+        // re-send would not change.
+        _forcePilot = false;
+      } else if(_forcePilotRetries > 0) {
+        _forcePilotRetries--;
+        _forcePilotRetryAt = millis() + EVSE_FORCE_PILOT_RETRY_MS;
+        DBUGF("EVSE: forced pilot not confirmed (%d), retrying", ret);
+        MicroTask.wakeTask(this);
+      } else {
+        _forcePilot = false;
+        DEBUG_PORT.printf("EVSE: forced pilot not confirmed (%d), giving up\n", ret);
+      }
+    });
+    changeMade = true;
+  }
+  else if(charge_current != _monitor.getPilot())
   {
     DBUGF("Set pilot to %d", charge_current);
-    _monitor.setPilot(charge_current, force);
+    _monitor.setPilot(charge_current, false);
     changeMade = true;
   }
 
@@ -452,6 +487,16 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
     _evaluateTargetState = false;
     setTargetState(_targetProperties);
   }
+
+  // A forced pilot waiting to be retried
+  if(_forcePilot && !_forcePilotInFlight) {
+    long wait = (long)(_forcePilotRetryAt - millis());
+    if(wait <= 0) {
+      _evaluateTargetState = true;
+      return 0;
+    }
+    return wait;
+  }
   return MicroTask.Infinate;
 }
 
@@ -499,6 +544,9 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target,
     {
       // External command: always re-send the current to the controller, even if unchanged
       _forcePilot = true;
+      _forcePilotGen++;
+      _forcePilotRetries = EVSE_FORCE_PILOT_RETRIES;
+      _forcePilotRetryAt = millis();
       _evaluateClaims = true;
       MicroTask.wakeTask(this);
     }
