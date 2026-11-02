@@ -1052,11 +1052,12 @@ bool config_deserialize(JsonDocument &doc)
   if(!doc["max_current_soft"].isNull())
   {
     long current = doc["max_current_soft"];
+    // Always pass the request on to the controller, even if unchanged
     if(current != evse.getMaxConfiguredCurrent()) {
-      evse.setMaxConfiguredCurrent(current);
       config_modified = true;
       DBUGLN("max_current_soft changed");
     }
+    evse.setMaxConfiguredCurrent(current);
   }
 
   if(!doc["max_current_hard"].isNull())
