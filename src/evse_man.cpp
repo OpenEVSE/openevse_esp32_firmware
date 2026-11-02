@@ -321,6 +321,11 @@ bool EvseManager::setTargetState(EvseProperties &target)
         // The controller answered; NK means it clamped/refused, which a
         // re-send would not change.
         _forcePilot = false;
+        // Normal updates were suppressed while forced; re-evaluate so a target
+        // that changed during the send is applied. Only sends if it differs
+        // from the pilot the controller now has, so no duplicate.
+        _evaluateTargetState = true;
+        MicroTask.wakeTask(this);
       } else if(_forcePilotRetries > 0) {
         _forcePilotRetries--;
         _forcePilotRetryAt = millis() + EVSE_FORCE_PILOT_RETRY_MS;
@@ -329,6 +334,9 @@ bool EvseManager::setTargetState(EvseProperties &target)
       } else {
         _forcePilot = false;
         DEBUG_PORT.printf("EVSE: forced pilot not confirmed (%d), giving up\n", ret);
+        // Same as above: pick up any newer target through the normal path.
+        _evaluateTargetState = true;
+        MicroTask.wakeTask(this);
       }
     });
     changeMade = true;

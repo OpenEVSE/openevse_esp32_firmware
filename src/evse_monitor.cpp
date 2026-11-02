@@ -315,6 +315,11 @@ void EvseMonitor::evseBoot(const char *firmware)
   // its settings; reads taken immediately can return transient values.
   _bootReadPending = true;
   _bootReadAt = millis() + EVSE_BOOT_READ_DELAY_MS;
+  // Hold every command from any source (EvseManager, scheduler, MQTT/HTTP,
+  // RAPI pass-through) for the same window; they queue and go out in order.
+  if(_sender) {
+    _sender->holdSend(EVSE_BOOT_READ_DELAY_MS);
+  }
   MicroTask.wakeTask(this);
 }
 
@@ -471,7 +476,15 @@ void EvseMonitor::updateCurrentSettings(long min_current, long max_hardware_curr
 
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 {
-  if(_bootReadPending && (long)(millis() - _bootReadAt) >= 0) {
+  if(_bootReadPending) {
+    // The controller just restarted: send it nothing (heartbeat, polls,
+    // settings) until the delayed boot read is due. RapiSender also holds any
+    // other command (see evseBoot()) for the same window.
+    unsigned long now = millis();
+    long wait = (long)(_bootReadAt - now);
+    if(wait > 0) {
+      return (unsigned long)wait;
+    }
     _bootReadPending = false;
     bootRead();
   }
@@ -588,11 +601,6 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 
   _count ++;
 
-  if(_bootReadPending) {
-    long wait = (long)(_bootReadAt - millis());
-    if(wait < 0) wait = 0;
-    if(wait < (long)EVSE_MONITOR_POLL_TIME) return wait;
-  }
   return EVSE_MONITOR_POLL_TIME;
 }
 
