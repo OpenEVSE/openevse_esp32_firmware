@@ -325,6 +325,14 @@ void EvseMonitor::evseBoot(const char *firmware)
 
 void EvseMonitor::bootRead()
 {
+  // Boot reads are queued as priority commands: they may use the queue room
+  // kept free during the post-restart hold, and each is retried up to
+  // RAPI_PRIORITY_RETRIES times if it times out or gets a garbled reply.
+  // Covers only the commands queued directly below, not ones queued later
+  // from their callbacks (those are re-sent by loop() if they fail).
+  if(_sender) {
+    _sender->setPriority(true);
+  }
   _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count)
   {
     if(RAPI_RESPONSE_OK == ret)
@@ -406,6 +414,10 @@ void EvseMonitor::bootRead()
   readCableTemperatures();
   readCableTempConfig();
 #endif // ENABLE_CABLE_TEMP
+
+  if(_sender) {
+    _sender->setPriority(false);
+  }
 }
 
 void EvseMonitor::updateEvseState(uint8_t evse_state, uint8_t pilot_state, uint32_t vflags)
