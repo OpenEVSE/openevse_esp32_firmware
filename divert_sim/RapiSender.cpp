@@ -56,7 +56,7 @@ void
 RapiSender::_sendCmd(const char *cmdstr) {
 }
 
-void RapiSender::_sendTail(uint8_t chk) {
+void RapiSender::_sendTail(uint8_t chk, bool /*addSeq*/) {
 }
 
 // return = 0 = OK

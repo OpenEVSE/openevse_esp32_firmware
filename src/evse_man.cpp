@@ -333,7 +333,7 @@ bool EvseManager::setTargetState(EvseProperties &target)
     });
     changeMade = true;
   }
-  else if(charge_current != _monitor.getPilot())
+  else if(!_forcePilot && charge_current != _monitor.getPilot())
   {
     DBUGF("Set pilot to %d", charge_current);
     _monitor.setPilot(charge_current, false);
