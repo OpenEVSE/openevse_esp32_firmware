@@ -244,6 +244,7 @@ class EvseManager : public MicroTasks::Task
 
     bool _evaluateClaims;
     bool _evaluateTargetState;
+    bool _forcePilot;
 
     // Retry interval while the EVSE module has not answered yet: starts at
     // 1 s and doubles to 10 s, so a probe lost during boot costs a second
@@ -283,7 +284,7 @@ class EvseManager : public MicroTasks::Task
 
     bool begin();
 
-    bool claim(EvseClient client, int priority, EvseProperties &target);
+    bool claim(EvseClient client, int priority, EvseProperties &target, bool force = false);
     bool release(EvseClient client);
     bool clientHasClaim(EvseClient client);
     uint8_t getClaimsVersion();

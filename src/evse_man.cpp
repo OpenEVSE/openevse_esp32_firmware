@@ -136,6 +136,7 @@ EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   _targetProperties(EvseState::Active),
   _hasClaims(false),
   _evaluateClaims(true),
+  _forcePilot(false),
   _evaluateTargetState(false),
   _evseConnectRetryMs(EVSE_CONNECT_RETRY_MIN_MS),
   _vehicleValid(0),
@@ -295,10 +296,12 @@ bool EvseManager::setTargetState(EvseProperties &target)
   }
   DBUGVAR(charge_current);
 
-  if(charge_current != _monitor.getPilot())
+  bool force = _forcePilot;
+  _forcePilot = false;
+  if(force || charge_current != _monitor.getPilot())
   {
     DBUGF("Set pilot to %d", charge_current);
-    _monitor.setPilot(charge_current);
+    _monitor.setPilot(charge_current, force);
     changeMade = true;
   }
 
@@ -460,7 +463,7 @@ bool EvseManager::begin()
   return true;
 }
 
-bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
+bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target, bool force)
 {
   Claim *slot = NULL;
 
@@ -491,6 +494,13 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
           event["override_version"] = manual.setVersion(manual.getVersion() + 1);
       }
       event_send(event);
+    }
+    if(force)
+    {
+      // External command: always re-send the current to the controller, even if unchanged
+      _forcePilot = true;
+      _evaluateClaims = true;
+      MicroTask.wakeTask(this);
     }
     return true;
   }
