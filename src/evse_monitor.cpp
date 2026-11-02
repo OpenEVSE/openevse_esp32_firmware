@@ -6,6 +6,10 @@
 
 #include "emonesp.h"
 #include "evse_monitor.h"
+
+#ifndef EVSE_BOOT_READ_DELAY_MS
+#define EVSE_BOOT_READ_DELAY_MS 1000
+#endif
 extern uint32_t voltage_cfg;
 extern uint32_t heartbeat_interval_cfg;
 extern uint32_t heartbeat_current_cfg;
@@ -307,6 +311,15 @@ void EvseMonitor::evseBoot(const char *firmware)
 #endif // ENABLE_CABLE_TEMP
   _zero_cross_threshold_ma = OPENEVSE_RELAY_HEALTH_NOT_AVAILABLE;
 
+  // Give the controller a moment after its boot notification before reading
+  // its settings; reads taken immediately can return transient values.
+  _bootReadPending = true;
+  _bootReadAt = millis() + EVSE_BOOT_READ_DELAY_MS;
+  MicroTask.wakeTask(this);
+}
+
+void EvseMonitor::bootRead()
+{
   _openevse.getFaultCounters([this](int ret, long gfci_count, long nognd_count, long stuck_count)
   {
     if(RAPI_RESPONSE_OK == ret)
@@ -458,6 +471,11 @@ void EvseMonitor::updateCurrentSettings(long min_current, long max_hardware_curr
 
 unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 {
+  if(_bootReadPending && (long)(millis() - _bootReadAt) >= 0) {
+    _bootReadPending = false;
+    bootRead();
+  }
+
   DBUG("EVSE monitor woke: ");
   DBUG(WakeReason_Scheduled == reason ? "WakeReason_Scheduled" :
        WakeReason_Event == reason ? "WakeReason_Event" :
@@ -570,6 +588,11 @@ unsigned long EvseMonitor::loop(MicroTasks::WakeReason reason)
 
   _count ++;
 
+  if(_bootReadPending) {
+    long wait = (long)(_bootReadAt - millis());
+    if(wait < 0) wait = 0;
+    if(wait < (long)EVSE_MONITOR_POLL_TIME) return wait;
+  }
   return EVSE_MONITOR_POLL_TIME;
 }
 
