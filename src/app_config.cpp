@@ -9,7 +9,6 @@
 
 #include "app_config.h"
 #include "app_config_mqtt.h"
-#include "config_storage.h"
 #include "app_config_mode.h"
 #include "temp_throttle.h"
 #include "flash_migrate.h"
@@ -529,7 +528,7 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flags2Opt, flags2Changed, CONFIG2_LABS_ENABLED, CONFIG2_LABS_ENABLED, "labs_enabled", "labs")
 };
 
-ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
+ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET, CONFIG_SIZE);
 ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FACTORY_OFFSET);
 
 // Set at boot when a stored user config exists but can't be read. Defaults are in
@@ -544,52 +543,8 @@ static bool config_storage_held = false;
 static bool config_user_unsaved = false;
 static bool config_factory_unsaved = false;
 
-// EEPROMClass::begin() reports failure on the device; the simulator's returns void
-static bool config_eeprom_begin()
-{
-#ifdef EPOXY_DUINO
-  EEPROM.begin(EEPROM_SIZE);
-  return true;
-#else
-  return EEPROM.begin(EEPROM_SIZE);
-#endif
-}
-
-// Used instead of ConfigJson::commit(), which doesn't look at whether rendering
-// the config worked or whether it fits (see config_storage.h). The JSON is built
-// before the EEPROM's 4 KB buffer is taken, so a low heap fails here while the
-// stored record is still untouched. Nothing is lost by skipping commit()'s
-// modified flag: EEPROM.commit() doesn't touch flash if no byte changed.
-static bool config_store(ConfigJson &config, size_t offset, size_t size)
-{
-  JsonDocument doc;
-  config.serialize(doc, false, true, false);
-  String json;
-  serializeJson(doc, json);
-
-  if(!config_record_complete(doc, json, size)) {
-    DBUGF("Config not saved: %u of %u bytes rendered, limit %u, overflowed %d",
-          (unsigned)json.length(), (unsigned)measureJson(doc), (unsigned)size, doc.overflowed());
-    return false;
-  }
-
-  if(!config_eeprom_begin()) {
-    DBUGLN("Config not saved: EEPROM unavailable");
-    return false;
-  }
-
-  size_t length = json.length();
-  EEPROM.write(offset + 0, length & 0xff);
-  EEPROM.write(offset + 1, (length >> 8) & 0xff);
-  for(size_t i = 0; i < length; i++) {
-    EEPROM.write(offset + CONFIG_RECORD_HEADER_SIZE + i, json[i]);
-  }
-
-  bool saved = EEPROM.commit();
-  EEPROM.end();
-  return saved;
-}
-
+// Saves go through ConfigJson::commit(), which refuses a record that didn't render
+// in full or doesn't fit its region, and leaves the stored record alone then.
 static bool config_store_user(bool requested = false)
 {
   if(config_storage_held && !requested) {
@@ -597,7 +552,7 @@ static bool config_store_user(bool requested = false)
     return false;
   }
 
-  config_user_unsaved = !config_store(user_config, CONFIG_OFFSET, CONFIG_SIZE);
+  config_user_unsaved = !user_config.commit();
   if(!config_user_unsaved) {
     config_storage_held = false;
   }
@@ -606,44 +561,8 @@ static bool config_store_user(bool requested = false)
 
 static bool config_store_factory()
 {
-  config_factory_unsaved = !config_store(factory_config, FACTORY_OFFSET, FACTORY_SIZE);
+  config_factory_unsaved = !factory_config.commit();
   return !config_factory_unsaved;
-}
-
-// True when the user record holds something that can't be parsed, or the EEPROM
-// can't be read at all, in which case ConfigJson::load() would see nothing stored.
-// A header too damaged to recognise counts as well: load() can't tell that from
-// an empty region, so anything that isn't blank is treated as a damaged record.
-static bool config_stored_unreadable()
-{
-  if(!config_eeprom_begin()) {
-    return true;
-  }
-
-  uint8_t lengthLow = EEPROM.read(CONFIG_OFFSET + 0);
-  uint8_t lengthHigh = EEPROM.read(CONFIG_OFFSET + 1);
-  char start = (char)EEPROM.read(CONFIG_OFFSET + CONFIG_RECORD_HEADER_SIZE);
-
-  String json;
-  bool blank = false;
-  bool present = config_record_present(lengthLow, lengthHigh, start, EEPROM_SIZE);
-  if(present) {
-    size_t length = lengthLow | ((size_t)lengthHigh << 8);
-    json.reserve(length);
-    for(size_t i = 0; i < length; i++) {
-      json += (char)EEPROM.read(CONFIG_OFFSET + CONFIG_RECORD_HEADER_SIZE + i);
-    }
-  } else {
-    blank = config_region_blank([](size_t i) { return EEPROM.read(CONFIG_OFFSET + i); }, CONFIG_SIZE);
-  }
-  EEPROM.end();
-
-  if(!present) {
-    return !blank;
-  }
-
-  JsonDocument doc;
-  return DeserializationError::Ok != deserializeJson(doc, json);
 }
 
 bool config_has_unsaved_changes(bool factory)
@@ -696,7 +615,7 @@ config_load_settings()
 
   config_user_unsaved = false;
   config_factory_unsaved = false;
-  config_storage_held = config_stored_unreadable();
+  config_storage_held = user_config.storedUnreadable();
   if(config_storage_held) {
     DBUGLN("Stored config is unreadable, keeping it and running on defaults");
   }
