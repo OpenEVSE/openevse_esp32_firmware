@@ -662,7 +662,9 @@ config_load_settings()
 #endif
 
     // Save any changes
-    if(flagsChanged.set(new_changed)) {
+    // Through user_config so ConfigJson marks the record modified; setting the
+    // option directly leaves commit() with nothing to write.
+    if(user_config.set("flags_changed", new_changed)) {
       config_store_user();
     }
   }
