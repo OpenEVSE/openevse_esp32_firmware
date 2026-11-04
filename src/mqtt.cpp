@@ -658,7 +658,7 @@ void Mqtt::setClaim(bool override, EvseProperties &props) {
       publishOverride();
     }
   } else {
-    if (_evse->claim(EvseClient_OpenEVSE_MQTT, EvseManager_Priority_MQTT, props)) {
+    if (_evse->claim(EvseClient_OpenEVSE_MQTT, EvseManager_Priority_MQTT, props, true)) {
       publishClaim();
     }
   }

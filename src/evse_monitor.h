@@ -298,6 +298,11 @@ class EvseMonitor : public MicroTasks::Task
     uint32_t _heartbeat_generation;
 
     char _firmware_version[32];
+
+    // Deferred settings read after a controller boot notification
+    bool _bootReadPending = false;
+    unsigned long _bootReadAt = 0;
+    void bootRead();
     char _serial[16];
 
     // Whether $S0 (set LCD backlight type) is understood by this controller
