@@ -53,12 +53,16 @@ reach its package registry (network restriction).
 
 ## Two-core tree
 
-The boards split across two Arduino cores, by flash size:
+Core 3 is the default platform (`[env] platform` in `platformio.ini`, the line
+dependency management updates). The 4MB boards opt into core 2 by extending
+`env:core_2`, and the 16MB+ boards extend `env:core_3`:
 
-| Boards | Platform | Arduino / IDF | Why |
-|---|---|---|---|
-| 4MB (`openevse_wifi_v1`, gateways, huzzah, …) — the default | `espressif32@7.1.3` | core **2.x** / IDF4 | Keeps the IDF4 image small enough for **dual-slot OTA** on 4MB flash. The core-3 build of these images did not fit the app slot. |
-| 16MB+ (`openevse_wifi_v1_16mb`, `openevse_wifi_tft_v1[_dev]`) | `${common.platform_core3}` (`espressif32@8.0.0`) | core **3.x** / IDF5 | Larger flash / newer silicon needs the core-3 toolchain. These are hybrid `framework = arduino, espidf` builds. |
+| Boards | Env base | Platform | Arduino / IDF | Why |
+|---|---|---|---|---|
+| 16MB+ (`openevse_wifi_v1_16mb`, `openevse_wifi_tft_v1[_dev]`) | `env:core_3` (default) | `espressif32@8.0.0` | core **3.x** / IDF5 | Larger flash / newer silicon needs the core-3 toolchain. These are hybrid `framework = arduino, espidf` builds. |
+| 4MB (`openevse_wifi_v1`, gateways, huzzah, …) | `env:core_2` | `espressif32@7.1.3` | core **2.x** / IDF4 | Keeps the image small enough for **dual-slot OTA** on 4MB flash. The core-3 build of these images did not fit the app slot. |
+
+A new firmware env picks its core by extending one of the two.
 
 Shared `src/` code that touches APIs which changed between cores (e.g. LEDC,
 mbedTLS cert parsing) is version-guarded on `ESP_ARDUINO_VERSION` /
@@ -68,32 +72,33 @@ mbedTLS cert parsing) is version-guarded on `ESP_ARDUINO_VERSION` /
 
 The two platforms declare ~13 package names in common (the Arduino framework,
 esp-idf, the toolchains, several `tool-*`) but pin **different versions**. They
-all install into one `PLATFORMIO_CORE_DIR` (`~/.platformio`), so building a
-core-2 env right after a core-3 env — or vice versa — **evicts and re-downloads**
-those packages every time you switch. (CI is immune: each job runs on a fresh,
-isolated runner.)
+install into one `PLATFORMIO_CORE_DIR`, so building a core-2 env right after a
+core-3 env, or vice versa, **evicts and re-downloads** those packages every time
+you switch. (CI is immune: each job builds one env on a fresh runner.)
 
-To avoid the thrash locally, build through the wrapper, which routes each core to
-its own `PLATFORMIO_CORE_DIR`:
+To avoid the thrash locally, build through the wrapper, which routes core-2 envs
+to their own `PLATFORMIO_CORE_DIR`:
 
 ```bash
-scripts/pio run -e openevse_wifi_v1_16mb   # core-3  -> ~/.platformio-core3
-scripts/pio run -e openevse_wifi_v1        # core-2  -> ~/.platformio (default)
+scripts/pio run -e openevse_wifi_v1_16mb   # core 3 -> ~/.platformio (default)
+scripts/pio run -e openevse_wifi_v1        # core 2 -> ~/.platformio-core2
 scripts/pio device monitor                 # any other pio subcommand, passed through
 ```
 
-`scripts/pio` is a transparent `pio` drop-in: it reads `-e <env>`, picks the
-matching core dir, and execs the real `pio` with your args unchanged. Notes:
+`scripts/pio` is a transparent `pio` drop-in: it picks the core dir from the
+envs being built (or `default_envs` when none is given) and execs the real `pio`
+with your args unchanged. Notes:
 
-- **core-2 stays in the default `~/.platformio`**, so bare `pio`, CI, and IDE
-  integrations are unaffected.
-- **core-3 goes to `~/.platformio-core3`** (override with `PIO_CORE3_DIR`). The
-  first core-3 build populates it once (downloads its toolchain/framework); after
-  that, switching cores never re-downloads.
-- It **refuses** to build core-2 and core-3 envs in a single invocation (they
-  can't share a core dir) — split them into two commands.
+- **core 3 stays in the default `~/.platformio`**, so bare `pio`, CI and IDE
+  integrations build core 3 by default.
+- **core 2 goes to `~/.platformio-core2`** (override with `PIO_CORE2_DIR`). The
+  first core-2 build populates it once; after that, switching cores never
+  re-downloads. If you used the old `~/.platformio-core3` directory, it is no longer
+  used and can be deleted.
+- It **refuses** to build core-2 and other envs in a single invocation (they
+  can't share a core dir), so split them into two commands.
 
-Trade-off: the separate core-3 dir costs a few GB of disk. That's the price of
+Trade-off: the separate core-2 dir costs a few GB of disk. That's the price of
 never re-downloading on a core switch.
 
 ## Debug builds
