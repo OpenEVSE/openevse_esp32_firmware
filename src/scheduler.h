@@ -6,6 +6,11 @@
 #include <MicroTasks.h>
 #include "evse_man.h"
 
+class DivertTask;
+class CurrentShaperTask;
+class RfidTask;
+class Limit;
+
 // Feature activated/deactivated by the timer window.
 enum class SchedulerFeature : uint8_t {
   None    = 0,
@@ -262,6 +267,13 @@ class Scheduler : public MicroTasks::Task
 
   private:
     EvseManager *_evse;
+    // Feature collaborators the timer windows switch on/off. Injected rather
+    // than reached through the globals so the divert_sim host simulator can
+    // run one Scheduler per simulated charge point.
+    DivertTask *_divert;
+    CurrentShaperTask *_shaper;
+    RfidTask *_rfid;
+    Limit *_limit;
     Event _events[SCHEDULER_MAX_EVENTS];
 
     EventInstance _firstEvent;
@@ -297,7 +309,8 @@ class Scheduler : public MicroTasks::Task
     void setup();
     unsigned long loop(MicroTasks::WakeReason reason);
   public:
-    Scheduler(EvseManager &evse);
+    Scheduler(EvseManager &evse, DivertTask &divert, CurrentShaperTask &shaper,
+              RfidTask &rfid, Limit &limit);
 
     bool begin();
 
