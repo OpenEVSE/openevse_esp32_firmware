@@ -235,6 +235,7 @@ LedManagerTask::LedManagerTask() :
   wifiConnected(false),
   flashState(false),
   brightness(LED_DEFAULT_BRIGHTNESS),
+  standbyDark(false),
   onStateChange(this),
   onSettingsChanged(this)
 {
@@ -777,6 +778,11 @@ void LedManagerTask::setNewState(bool wake)
     priority = wifiPriority;
   }
 
+  // Dark in standby, but let a running LED self-test finish
+  if(standbyDark && newState > LedState_Off) {
+    newState = LedState_Off;
+  }
+
   if(newState != state)
   {
     state = newState;
@@ -872,5 +878,12 @@ void LedManagerTask::setBrightness(uint8_t brightness)
   MicroTask.wakeTask(this);
 }
 
+void LedManagerTask::setStandbyDark(bool dark)
+{
+  if(dark != standbyDark) {
+    standbyDark = dark;
+    setNewState();
+  }
+}
 
 LedManagerTask ledManager;

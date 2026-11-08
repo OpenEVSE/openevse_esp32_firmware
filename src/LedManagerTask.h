@@ -41,6 +41,8 @@ class LedManagerTask : public MicroTasks::Task
 
     uint8_t brightness;
 
+    bool standbyDark;
+
     MicroTasks::EventListener onStateChange;
     MicroTasks::EventListener onSettingsChanged;
 
@@ -79,6 +81,9 @@ class LedManagerTask : public MicroTasks::Task
     int getButtonPressed();
 
     void setBrightness(uint8_t brightness);
+
+    // Blank the LEDs while the display is in standby (tft_standby_leds_off).
+    void setStandbyDark(bool dark);
 };
 
 extern LedManagerTask ledManager;
