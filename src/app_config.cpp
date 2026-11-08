@@ -4,10 +4,18 @@
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
 #include <ConfigJson.h>
+#include "config_backup.h"
 #include <LittleFS.h>
 #include "fs_usage.h"
 
 #include "app_config.h"
+#ifdef ENABLE_SD_CARD
+#include "sd_card.h"
+#include "sdlog_store.h"
+#endif
+#if defined(ESP32) && !defined(EPOXY_DUINO)
+#include <esp_idf_version.h>
+#endif
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
 #include "temp_throttle.h"
@@ -95,6 +103,7 @@ String temp_unit;
 String tft_theme;
 uint32_t tft_brightness;
 uint32_t tft_standby_brightness;
+bool tft_standby_leds_off;
 
 // LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
 // char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
@@ -373,6 +382,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(tft_theme, "dark", "tft_theme", "tt"),
   new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
   new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
+  new ConfigOptDefinition<bool>(tft_standby_leds_off, false, "tft_standby_leds_off", "tslo"),
 #endif
 
 // LCD backlight timeout
@@ -531,6 +541,10 @@ ConfigOpt *opts[] =
 ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
 ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FACTORY_OFFSET);
 
+// Whether user_config.load() found a stored config at boot (false = running on
+// defaults). Read by boot to decide whether a card mirror should be restored.
+static bool config_loaded = false;
+
 // -------------------------------------------------------------------
 // config version handling
 // -------------------------------------------------------------------
@@ -575,7 +589,8 @@ config_load_settings()
   user_config.onChanged(config_changed);
 
   factory_config.load(false);
-  if(!user_config.load(true))
+  config_loaded = user_config.load(true);
+  if(!config_loaded)
   {
 #if ENABLE_CONFIG_V1_IMPORT
     DBUGF("No JSON config found, trying v1 settings");
@@ -618,6 +633,7 @@ config_load_settings()
     // Save any changes
     if(flagsChanged.set(new_changed)) {
       user_config.commit();
+      config_backup_to_card();
     }
   }
 
@@ -695,9 +711,10 @@ void config_changed(String name)
     timeManager.setDhcpEnabled(config_sntp_dhcp());
   } else if(name == "sntp_hostname") {
     timeManager.setHost(sntp_hostname.c_str());
-  } else if(name == "lcd_backlight_timeout") {
+  } else if(name == "lcd_backlight_timeout" || name == "tft_standby_leds_off") {
     // The display task sleeps until its next scheduled update; nudge it so a
-    // new timeout (or "never") applies now rather than at the next state change
+    // new timeout (or "never"), or the LEDs-in-standby switch, applies now
+    // rather than at the next state change
     MicroTask.wakeTask(&lcd);
   }
 #endif
@@ -708,6 +725,9 @@ void config_commit(bool factory)
   ConfigJson &config = factory ? factory_config : user_config;
   config.set("factory_write_lock", true);
   config.commit();
+  if(!factory) {
+    config_backup_to_card();
+  }
 }
 
 // Persist user config without touching the factory_write_lock flag.
@@ -716,6 +736,12 @@ void config_commit(bool factory)
 void config_user_commit()
 {
   user_config.commit();
+  config_backup_to_card();
+}
+
+bool config_loaded_from_storage()
+{
+  return config_loaded;
 }
 
 // Persist the notification ack state.
@@ -1128,6 +1154,18 @@ bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, boo
   doc["protocol"] = "-";
   doc["espinfo"] = ESPAL.getChipInfo();
   doc["espflash"] = ESPAL.getFlashChipSize();
+#if defined(ESP32) && !defined(EPOXY_DUINO)
+  // Structured form of espinfo for the UI: model, silicon revision
+  // (major*100+minor, e.g. 2 == v0.2), cores, and PSRAM size (0 when none).
+  doc["chip_model"] = ESP.getChipModel();
+#if ESP_IDF_VERSION_MAJOR >= 5
+  doc["chip_rev"] = (uint32_t)ESP.getChipRevision();          // already major*100+minor
+#else
+  doc["chip_rev"] = (uint32_t)ESP.getChipRevision() * 100;    // IDF 4 reports the major only
+#endif
+  doc["chip_cores"] = (uint32_t)ESP.getChipCores();
+  doc["psram_size"] = (uint32_t)ESP.getPsramSize();
+#endif
   doc["heap_size"] = (uint32_t)ESP.getHeapSize();
   {
     // Cached: see fs_usage.h for why this must not touch the filesystem here.
@@ -1136,6 +1174,13 @@ bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, boo
     doc["littlefs_size"] = lfs_total;
     doc["littlefs_used"] = lfs_used;
   }
+#ifdef ENABLE_SD_CARD
+  if(sd_card_mounted()) {
+    doc["sd_size"] = sd_card_size();
+    doc["sd_used"] = sd_card_used();
+    doc["sd_log_size"] = (uint64_t)SDLOG_CAPACITY * SDLOG_RECORD_BYTES;
+  }
+#endif
   {
     const esp_partition_t *p = esp_ota_get_running_partition();
     doc["app0_size"]   = p ? (uint32_t)p->size : 0;
@@ -1306,5 +1351,7 @@ void config_reset()
   ResetEEPROM();
   LittleFS.format();
   config_load_settings();
+  // After the load, which can commit (and so mirror) the defaults.
+  config_backup_clear();
 }
 

@@ -74,7 +74,9 @@ hardware is present.
   [Installer tools](installer-tools.md).
 - **[Display](screenshots/settings-display-dark-desktop.png)** — theme,
   brightness, and sleep timeout for the on-device TFT touchscreen (only shown
-  on TFT-equipped hardware). On chargers with the 2-line character LCD
+  on TFT-equipped hardware). The status LEDs can also go dark while the
+  screen is asleep (`tft_standby_leds_off`, off by default); anything that
+  wakes the screen lights them again. On chargers with the 2-line character LCD
   instead: the backlight type (RGB, or monochrome for a JuiceBox v2
   conversion) and the same idle timeout, which switches the LCD backlight
   off; it stays lit while charging or in a fault, and any state change or
