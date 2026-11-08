@@ -516,6 +516,9 @@ properties:
   tft_standby_brightness:
     type: integer
     description: TFT standby brightness, in %, `0` turns the screen off. The web app offers 0 to 100. Only present on builds with a TFT
+  tft_standby_leds_off:
+    type: boolean
+    description: Turn the status LEDs off while the TFT is in standby; they come back with the screen. Default `false`. Only present on builds with a TFT
   temp_throttle_enabled:
     type: boolean
     description: Reduce the charge current as the temperature approaches the setpoint

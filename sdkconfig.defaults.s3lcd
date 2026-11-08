@@ -1,0 +1,48 @@
+# OpenEVSE ESP32-S3 LCD board (ESP32-S3-WROOM-1U-N16R8) overlay. Applied after
+# sdkconfig.defaults.esp32s3. Every symbol here must be checked in the
+# generated sdkconfig.openevse_s3_lcd after a build: Kconfig drops unknown or
+# unsatisfiable symbols silently.
+
+# ---- module: 8 MB octal PSRAM, 16 MB quad flash --------------------------
+CONFIG_SPIRAM_MODE_OCT=y
+# CONFIG_SPIRAM_MODE_QUAD is not set
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+# CONFIG_ESPTOOLPY_FLASHMODE_DIO is not set
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# ---- put the network stack in PSRAM ---------------------------------------
+# WiFi driver + lwIP pools try PSRAM first (they fall back to internal).
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+# mbedTLS contexts, record buffers and parsed certs in PSRAM. Replaces the
+# runtime mbedtls_platform_set_calloc_free() hook in main.cpp, which stays as a
+# no-op-safe fallback for the prebuilt build.
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+# CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC is not set
+# CONFIG_MBEDTLS_DEFAULT_MEM_ALLOC is not set
+# Static RX buffers are DMA and always internal (1.6 KB each) -- leave the
+# seed's 8; only the dynamic pools benefit from PSRAM.
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=32
+# (TX buffers are the static type on this core, ESP_WIFI_TX_BUFFER_TYPE=0;
+#  a DYNAMIC_TX_BUFFER_NUM line here is dropped silently.)
+
+# ---- push ordinary heap traffic external -----------------------------------
+# The seed keeps every malloc() under 4 KB internal, which is most of the
+# firmware's traffic (Mongoose buffers, ArduinoJson, mDNS). 1 KB moves the
+# bulk of it to PSRAM; anything DMA-bound already asks for MALLOC_CAP_DMA /
+# MALLOC_CAP_INTERNAL explicitly (WiFi, SDMMC, RMT, I2C; TFT_eSPI's 18-bit
+# path has no DMA). The reserve keeps a floor of internal DRAM for those
+# callers once the ordinary heap has eaten the rest.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=1024
+CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
+
+# ---- never used on this board -----------------------------------------------
+# CONFIG_BT_ENABLED is not set
+
+# TCP send/receive buffers: 2x the defaults (4x MSS). lwIP pools live in PSRAM
+# on this board (SPIRAM_TRY_ALLOCATE_WIFI_LWIP), so the cost is nothing that
+# matters, and the web server drains one send buffer per main-loop pass, so a
+# bigger buffer is directly more bytes per pass. Measured: /energy/raw 500 pts
+# 1.75 s -> 0.9 s at 2 KB drain; this is the next step.
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=11488
+CONFIG_LWIP_TCP_WND_DEFAULT=11520

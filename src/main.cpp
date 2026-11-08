@@ -46,6 +46,10 @@
 #include "root_ca.h"
 #include "espal.h"
 #include "time_man.h"
+#include "rtc_ds3231.h"
+#include "sd_card.h"
+#include "sdlog_store.h"
+#include "config_backup.h"
 #include "tesla_client.h"
 #include "event.h"
 #include "ocpp.h"
@@ -57,6 +61,7 @@
 #include "psram.h"
 #include "boost.h"
 #include "notifications.h"
+#include "rapi_activity_led.h"
 #include "shelly_lnm.h"
 
 #if defined(ENABLE_PN532)
@@ -89,7 +94,9 @@
 EventLog eventLog;
 CertificateStore certs;
 
-EvseManager evse(RAPI_PORT, eventLog);
+// RAPI_EVSE_STREAM is RAPI_PORT unless the board fits RAPI activity LEDs, in
+// which case it is the counting decorator wrapped around it.
+EvseManager evse(RAPI_EVSE_STREAM, eventLog);
 Scheduler scheduler(evse);
 ManualOverride manual(evse);
 DivertTask divert(evse);
@@ -193,11 +200,39 @@ void setup()
   eventLog.begin();
   DBUGF("After eventLog.begin: %d", ESPAL.getFreeHeap());
 
+  // Before timeManager, and before any consumer of wall-clock time: on boards with
+  // a battery-backed RTC this is what gets the clock past the tsdb validity floor
+  // when the EVSE has been off and NTP has not answered yet. No-op elsewhere.
+  rtc_begin();
+  rtc_seed_system_time();
+
+  // The card is preferred over internal flash for the energy log when one is
+  // fitted, and is simply absent otherwise -- an empty slot must degrade to the
+  // existing tsdb path, not to no history at all. sd_card_loop() opens the log
+  // ring (creating it in the background on a fresh card).
+  //
+  // A board with no stored config but a config mirror on the card is a wiped
+  // or replaced module: restore and restart so everything from WiFi up starts
+  // from the restored settings. The mirror is armed only after this decision,
+  // so the default-config housekeeping commits above cannot clobber it.
+  if(sd_card_begin()) {
+    if(!config_loaded_from_storage() && config_restore_from_card()) {
+      DBUGLN("Config restored from the card, restarting");
+      delay(100);
+      restart_system();
+    }
+  }
+  config_backup_arm();
+
   timeManager.begin();
   DBUGF("After timeManager.begin: %d", ESPAL.getFreeHeap());
 
   evse.begin();
   DBUGF("After evse.begin: %d", ESPAL.getFreeHeap());
+
+#ifdef ENABLE_RAPI_ACTIVITY_LED
+  rapiActivityLed.begin(evse);
+#endif
 
   scheduler.begin();
   DBUGF("After scheduler.begin: %d", ESPAL.getFreeHeap());
@@ -336,11 +371,27 @@ void loop()
 
   web_server_loop();
   diagnostics_loop();
+  sd_card_loop();
   flash_migrate_loop();
 #ifdef ENABLE_OTA
   ota_loop();
 #endif
   rapiSender.loop();
+
+#ifdef HEAP_DEBUG_INTEGRITY
+  // Heap-corruption trap (openevse_s3_lcd_heapdebug env): walk every heap
+  // and abort on the first bad block, so a corrupter dies within ~10 s of
+  // its write instead of whenever the block is next reused.
+  {
+    static uint32_t last_check = 0;
+    if(millis() - last_check >= 10000) {
+      last_check = millis();
+      if(!heap_caps_check_integrity_all(true)) {
+        abort();
+      }
+    }
+  }
+#endif
 
   Profile_Start(MicroTask);
   MicroTask.update();

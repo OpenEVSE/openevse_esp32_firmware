@@ -54,6 +54,7 @@ extern String temp_unit;
 extern String tft_theme;
 extern uint32_t tft_brightness;
 extern uint32_t tft_standby_brightness;
+extern bool tft_standby_leds_off;
 
 // LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
 // char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
@@ -392,6 +393,7 @@ void config_user_commit();  // persist user config without touching factory_writ
 
 // True when a save of this record failed and nothing has stored its settings since
 bool config_has_unsaved_changes(bool factory);
+bool config_loaded_from_storage();  // false when boot found no stored config (defaults in use)
 // Persist notification_acks / notification_acks_fw. Writing those globals and
 // calling commit() is not enough - see the definition.
 void config_save_notification_acks(const String &acks, const String &fw);
