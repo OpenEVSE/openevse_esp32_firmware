@@ -49,6 +49,10 @@ struct PeerConnection {
   bool hasInitialStatus;              // True after first successful status fetch
   bool httpPending;                   // True while HTTP request is in flight
   bool configPushed;                  // True after config has been pushed to this peer
+  bool configPushInFlight;            // True from nonce request until the push's reply
+  unsigned long configPushTime;       // millis() when the in-flight push started
+  unsigned long configPushRetryAfter; // millis() before which a failed push is not retried
+  uint32_t configPushSeq;             // Identifies the current push attempt; stale replies are ignored
   bool identityFetched;               // True after id/name/limits learned from /config
   bool authRejected;                  // True while the peer is refusing our credential
   bool wsAuthPending;                 // True while fetching the WebSocket credential
@@ -70,6 +74,10 @@ struct PeerConnection {
     hasInitialStatus(false),
     httpPending(false),
     configPushed(false),
+    configPushInFlight(false),
+    configPushTime(0),
+    configPushRetryAfter(0),
+    configPushSeq(0),
     identityFetched(false),
     authRejected(false),
     wsAuthPending(false),

@@ -10,7 +10,10 @@ Every charger in a group holds the same `loadsharing_group_key`. The key signs
 peer requests and is never sent.
 
 1. The client calls `GET /loadsharing/nonce`, which needs no authentication. The
-   server returns a random single-use nonce, valid for 15 seconds.
+   server returns a random single-use nonce, valid for 15 seconds. It returns
+   404 unless the server has both `www_password` and `loadsharing_group_key`
+   set; the client then sends the request unsigned, which only a device with no
+   password accepts.
 2. The client computes `HMAC-SHA256(key, message)`, where the message is:
 
    ```text
@@ -96,7 +99,10 @@ Does not protect against:
   on all of them instead.
 - **Nonce flooding.** `/loadsharing/nonce` is open, so a LAN client can keep
   evicting nonces. The store is a fixed eight slots, so this costs peers retries
-  rather than memory.
+  rather than memory, but a sustained flood can keep a group in failsafe. A
+  per-client cap would blunt it, but ArduinoMongoose 1.2.0 does not expose the
+  remote address of an HTTP request (only of a WebSocket connection), so it
+  needs a library change first.
 
 Devices without a `www_password` stay open exactly as before.
 
@@ -113,6 +119,10 @@ Devices without a `www_password` stay open exactly as before.
   until they next reconnect, and only then does the new key apply.
 - **Stale WebSocket clients are discarded.** The library's automatic reconnect
   would resend a spent nonce, so the poller builds a new client for each attempt.
+- **Refused config pushes back off.** The controller sends one config push to a
+  member at a time. After a 401 or 403 it waits 30 seconds before trying again,
+  and 5 seconds after any other failure, so a member with the wrong key is not
+  sent a nonce request and a POST on every 500 ms tick.
 - **Upgrade order.** A peer on older firmware has no nonce endpoint. Requests to
   it go unsigned, which works only if it has no password.
 

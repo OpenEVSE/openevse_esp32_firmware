@@ -249,5 +249,6 @@ handoff scenarios.
 
 - Bulk peer deletion remains unsupported.
 - Peer transport remains unencrypted LAN HTTP/WebSocket. Requests are
-  authenticated with the group key since #1172; see
+  authenticated with the group key since #1172, on devices that have both
+  `www_password` and `loadsharing_group_key` set; see
   [load-sharing-peer-auth.md](load-sharing-peer-auth.md).

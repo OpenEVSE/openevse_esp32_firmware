@@ -234,9 +234,14 @@ def wait_for_peer(controller_url, member_url, predicate, timeout=60):
 class TestGroupWithPasswords:
     """The issue itself: a real controller and member, both password protected."""
 
-    def form_group(self, instance_pair_auto, controller_key, member_key):
-        controller = instance_pair_auto()["native_url"]
-        member = instance_pair_auto()["native_url"]
+    def form_group(self, multi_instance_group, controller_key, member_key):
+        # Two pairs on distinct port offsets. instance_pair_auto() would reuse
+        # the test's one offset, so its second call tears down the first
+        # instance and the "group" would be a single device.
+        controller_pair, member_pair = multi_instance_group(2)
+        controller = controller_pair["native_url"]
+        member = member_pair["native_url"]
+        assert controller != member
         secure(controller, controller_key)
         secure(member, member_key)
 
@@ -249,8 +254,8 @@ class TestGroupWithPasswords:
         assert r.status_code == 200, r.text
         return controller, member
 
-    def test_matching_keys_bring_the_member_online(self, instance_pair_auto):
-        controller, member = self.form_group(instance_pair_auto, GROUP_KEY, GROUP_KEY)
+    def test_matching_keys_bring_the_member_online(self, multi_instance_group):
+        controller, member = self.form_group(multi_instance_group, GROUP_KEY, GROUP_KEY)
         wait_for_peer(controller, member, lambda p: p.get("online"))
 
         # Config push reached the member over a signed POST /config
@@ -263,7 +268,7 @@ class TestGroupWithPasswords:
             time.sleep(1)
         pytest.fail("member never received the config push")
 
-    def test_mismatched_keys_are_reported(self, instance_pair_auto):
-        controller, member = self.form_group(instance_pair_auto, GROUP_KEY, OTHER_KEY)
+    def test_mismatched_keys_are_reported(self, multi_instance_group):
+        controller, member = self.form_group(multi_instance_group, GROUP_KEY, OTHER_KEY)
         peer = wait_for_peer(controller, member, lambda p: p.get("error") == "auth_failed")
         assert not peer.get("online")

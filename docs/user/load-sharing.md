@@ -52,7 +52,8 @@ existing connections pick it up.
 ## Members
 
 The controller pushes group configuration and allocations to members. Load
-sharing settings are read-only on a member. To change group settings, use the
+sharing settings are read-only on a member, apart from the Group key. To change
+group settings, use the
 controller shown on the member's Load sharing page.
 
 If allocation heartbeats stop, the member applies the configured safe current

@@ -21,6 +21,12 @@
 #include <ArduinoJson.h>
 #include <MongooseHttpClient.h>
 #include <MongooseHttp.h>
+#include <memory>
+
+// Wait before re-sending a config push the member refused (401/403), or that
+// failed for any other reason. Without a wait the push repeats every tick.
+#define CONFIG_PUSH_AUTH_BACKOFF_MS   30000UL
+#define CONFIG_PUSH_RETRY_BACKOFF_MS  5000UL
 
 // Global HTTP client for all peer HTTP requests
 static MongooseHttpClient httpClient;
@@ -248,6 +254,7 @@ void LoadSharingPeerPoller::processPeerConnection(const String& host, PeerConnec
         conn.state = PeerConnectionState::HTTP_FAILED;
         conn.retryCount++;
         conn.httpPending = false;
+        conn.authRejected = false;  // No answer at all: unreachable, not refused
         if (conn.httpRequest != nullptr) {
           conn.httpRequest->abort();
           conn.httpRequest = nullptr;
@@ -292,15 +299,21 @@ void LoadSharingPeerPoller::processPeerConnection(const String& host, PeerConnec
     }
 
     case PeerConnectionState::WS_CONNECTED: {
-      // Push config to newly connected peer if controller and not yet pushed
-      if (_groupState && _groupState->isController() && !conn.configPushed) {
-        pushConfigToPeer(host, conn);
-      }
+      if (_groupState && _groupState->isController()) {
+        // A config change was flagged: re-push now. A push still in flight
+        // carries the old config, so retire it: its reply must not mark the
+        // new config as delivered.
+        if (_configPushPending) {
+          conn.configPushed = false;
+          conn.configPushSeq++;
+          conn.configPushInFlight = false;
+          conn.configPushRetryAfter = 0;
+        }
 
-      // Re-push config if a config change was flagged
-      if (_groupState && _groupState->isController() && _configPushPending && conn.configPushed) {
-        conn.configPushed = false;  // Force re-push
-        pushConfigToPeer(host, conn);
+        // Push config to a newly connected peer, or retry one not yet accepted
+        if (!conn.configPushed) {
+          pushConfigToPeer(host, conn);
+        }
       }
 
       // Re-fetch the peer's /config (limits/identity) when its config_version
@@ -456,7 +469,9 @@ void LoadSharingPeerPoller::sendHttpBootstrap(const String& host, PeerConnection
     }
 
     conn.hasInitialStatus = true;
-    conn.retryCount = 0;  // Reset retry counter on success
+    // retryCount is not reset here: if /ws keeps failing after /status works,
+    // resetting on every bootstrap would retry at the base rate for ever. It is
+    // reset once the WebSocket delivers a status (handleWebSocketMessage).
     conn.state = PeerConnectionState::WS_CONNECTING;
     conn.httpPending = false;
 
@@ -485,6 +500,7 @@ void LoadSharingPeerPoller::sendHttpBootstrap(const String& host, PeerConnection
         conn.state = PeerConnectionState::HTTP_FAILED;
         conn.retryCount++;
         conn.httpPending = false;
+        conn.authRejected = false;  // No answer at all: unreachable, not refused
       }
     }
   });
@@ -546,7 +562,9 @@ void LoadSharingPeerPoller::connectWebSocket(const String& host, PeerConnection&
       it->second.state = PeerConnectionState::WS_CONNECTED;
       it->second.lastConnectedTime = millis();
       it->second.lastMessageTime = millis();
-      it->second.retryCount = 0;  // Reset retry counter on success
+      // retryCount is reset on the first message, not here. A peer that refuses
+      // /ws still completes the 101 handshake before closing, so onOpen alone
+      // does not show the connection works.
       this->_total_ws_connections++;
     }
   });
@@ -594,7 +612,7 @@ void LoadSharingPeerPoller::checkWebSocketConnection(const String& host, PeerCon
       conn.state = PeerConnectionState::WS_CONNECTED;
       conn.lastConnectedTime = millis();
       conn.lastMessageTime = millis();
-      conn.retryCount = 0;
+      // retryCount is reset on the first message (see the onOpen callback)
       _total_ws_connections++;
     }
   } else {
@@ -619,6 +637,9 @@ void LoadSharingPeerPoller::handleWebSocketMessage(const String& host, PeerConne
   }
 
   _total_messages_received++;
+  // The peer sends its status as soon as it accepts /ws, so a parsed message is
+  // the first sure sign the whole connection works.
+  conn.retryCount = 0;
 
   DBUGF("LoadSharingPeerPoller: [%s] Status updated (amp=%.1f, pilot=%.1f, state=%d)",
         host.c_str(), conn.statusCache.getAmp(), conn.statusCache.getPilot(), conn.statusCache.getState());
@@ -815,6 +836,23 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
     return;  // Already pushed
   }
 
+  // This runs on every tick until the push succeeds, and each attempt costs a
+  // nonce request as well as the POST. Send one at a time, and wait after a
+  // refusal rather than retrying every tick. The in-flight flag expires in
+  // case neither callback ever arrives.
+  unsigned long now = millis();
+  if (conn.configPushInFlight &&
+      (long)(now - (conn.configPushTime + 2 * _http_timeout_ms)) < 0) {
+    return;
+  }
+  if (conn.configPushRetryAfter != 0 && (long)(now - conn.configPushRetryAfter) < 0) {
+    return;
+  }
+  conn.configPushInFlight = true;
+  conn.configPushTime = now;
+  conn.configPushRetryAfter = 0;
+  uint32_t seq = ++conn.configPushSeq;  // Replies to earlier attempts are ignored
+
   DBUGF("LoadSharingPeerPoller: [%s] Pushing load sharing config", host.c_str());
 
   // Build config JSON
@@ -837,8 +875,23 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
   // POST to member's /config endpoint
   String baseUrl = getPeerBaseUrl(host);
 
+  // Ends the attempt. retryDelay 0 lets the next tick try again at once.
+  auto finish = [this, host, seq](unsigned long retryDelay) {
+    auto it = this->_connections.find(host);
+    if (it == this->_connections.end() || it->second.configPushSeq != seq) {
+      return;  // Gone, or superseded by a newer attempt
+    }
+    it->second.configPushInFlight = false;
+    if (retryDelay != 0) {
+      it->second.configPushRetryAfter = millis() + retryDelay;
+      if (it->second.configPushRetryAfter == 0) {
+        it->second.configPushRetryAfter = 1;  // 0 means "no wait"
+      }
+    }
+  };
+
   loadSharingAuthorisePeerRequest(baseUrl, "POST", "/config", body,
-                                  [this, host, baseUrl, body](const String& authorization) {
+                                  [this, host, baseUrl, body, seq, finish](const String& authorization) {
     String url = baseUrl + "/config";
     MongooseHttpClientRequest* req = httpClient.beginRequest(url.c_str());
     req->setMethod(HTTP_POST);
@@ -848,20 +901,33 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
       req->addHeader("Authorization", authorization.c_str());
     }
 
-    req->onResponse([this, host](MongooseHttpClientResponse* response) {
-      if (response->respCode() == 200) {
+    // onClose follows onResponse on a good exchange; on its own it means the
+    // member never answered.
+    auto responded = std::make_shared<bool>(false);
+    req->onResponse([this, host, seq, finish, responded](MongooseHttpClientResponse* response) {
+      *responded = true;
+      int code = response->respCode();
+      if (code == 200) {
         DBUGF("LoadSharingPeerPoller: [%s] Config push successful", host.c_str());
         auto it = this->_connections.find(host);
-        if (it != this->_connections.end()) {
+        if (it != this->_connections.end() && it->second.configPushSeq == seq) {
           it->second.configPushed = true;
         }
+        finish(0);
       } else {
-        DBUGF("LoadSharingPeerPoller: [%s] Config push failed with code %d", host.c_str(), response->respCode());
+        DBUGF("LoadSharingPeerPoller: [%s] Config push failed with code %d", host.c_str(), code);
+        // A refused credential will not fix itself in half a second; the most
+        // likely cause is a group key that differs on the member.
+        finish((code == 401 || code == 403) ? CONFIG_PUSH_AUTH_BACKOFF_MS
+                                            : CONFIG_PUSH_RETRY_BACKOFF_MS);
       }
     });
 
-    req->onClose([host]() {
+    req->onClose([host, finish, responded]() {
       DBUGF("LoadSharingPeerPoller: [%s] Config push HTTP connection closed", host.c_str());
+      if (!*responded) {
+        finish(CONFIG_PUSH_RETRY_BACKOFF_MS);
+      }
     });
 
     if (!req->send()) {
@@ -872,6 +938,7 @@ void LoadSharingPeerPoller::pushConfigToPeer(const String& host, PeerConnection&
       req->onResponse(MongooseHttpResponseHandler());
       req->onClose(MongooseSocketCloseHandler());
       delete req;
+      finish(CONFIG_PUSH_RETRY_BACKOFF_MS);
     }
   });
 }
