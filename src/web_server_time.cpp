@@ -13,7 +13,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include "time_man.h"
 
 extern bool isPositive(MongooseHttpServerRequest *request, const char *param);
-extern bool web_server_config_deserialise(JsonDocument &doc, bool factory);
+extern bool web_server_config_deserialise(JsonDocument &doc, bool factory, bool *saved = nullptr);
 
 void handleTimePost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response)
 {

@@ -4,10 +4,18 @@
 #include <Arduino.h>
 #include <EEPROM.h>             // Save config settings
 #include <ConfigJson.h>
+#include "config_backup.h"
 #include <LittleFS.h>
 #include "fs_usage.h"
 
 #include "app_config.h"
+#ifdef ENABLE_SD_CARD
+#include "sd_card.h"
+#include "sdlog_store.h"
+#endif
+#if defined(ESP32) && !defined(EPOXY_DUINO)
+#include <esp_idf_version.h>
+#endif
 #include "app_config_mqtt.h"
 #include "app_config_mode.h"
 #include "temp_throttle.h"
@@ -95,6 +103,7 @@ String temp_unit;
 String tft_theme;
 uint32_t tft_brightness;
 uint32_t tft_standby_brightness;
+bool tft_standby_leds_off;
 
 // LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
 // char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
@@ -374,6 +383,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<String>(tft_theme, "dark", "tft_theme", "tt"),
   new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
   new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
+  new ConfigOptDefinition<bool>(tft_standby_leds_off, false, "tft_standby_leds_off", "tslo"),
 #endif
 
 // LCD backlight timeout
@@ -530,8 +540,51 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flags2Opt, flags2Changed, CONFIG2_LABS_ENABLED, CONFIG2_LABS_ENABLED, "labs_enabled", "labs")
 };
 
-ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
+ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET, CONFIG_SIZE);
 ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FACTORY_OFFSET);
+
+// Set at boot when a stored user config exists but can't be read. Defaults are in
+// RAM by then, and saving them would turn what may be a passing fault into
+// permanent loss, so only a successful save of a change someone asked for may
+// replace that record, and that save is what clears this.
+// The factory record is checked separately at load and isn't covered.
+static bool config_storage_held = false;
+
+// Set when a save failed, so RAM holds settings the record doesn't. A retry of the
+// same request changes nothing in RAM and would otherwise never reach storage.
+static bool config_user_unsaved = false;
+static bool config_factory_unsaved = false;
+
+// Saves go through ConfigJson::commit(), which refuses a record that didn't render
+// in full or doesn't fit its region, and leaves the stored record alone then.
+static bool config_store_user(bool requested = false)
+{
+  if(config_storage_held && !requested) {
+    DBUGLN("Config not saved: stored config is unreadable");
+    return false;
+  }
+
+  config_user_unsaved = !user_config.commit();
+  if(!config_user_unsaved) {
+    config_storage_held = false;
+  }
+  return !config_user_unsaved;
+}
+
+static bool config_store_factory()
+{
+  config_factory_unsaved = !factory_config.commit();
+  return !config_factory_unsaved;
+}
+
+bool config_has_unsaved_changes(bool factory)
+{
+  return factory ? config_factory_unsaved : config_user_unsaved;
+}
+
+// Whether user_config.load() found a stored config at boot (false = running on
+// defaults). Read by boot to decide whether a card mirror should be restored.
+static bool config_loaded = false;
 
 // -------------------------------------------------------------------
 // config version handling
@@ -576,8 +629,16 @@ config_load_settings()
 {
   user_config.onChanged(config_changed);
 
+  config_user_unsaved = false;
+  config_factory_unsaved = false;
+  config_storage_held = user_config.storedUnreadable();
+  if(config_storage_held) {
+    DBUGLN("Stored config is unreadable, keeping it and running on defaults");
+  }
+
   factory_config.load(false);
-  if(!user_config.load(true))
+  config_loaded = user_config.load(true);
+  if(!config_loaded)
   {
 #if ENABLE_CONFIG_V1_IMPORT
     DBUGF("No JSON config found, trying v1 settings");
@@ -618,8 +679,12 @@ config_load_settings()
 #endif
 
     // Save any changes
-    if(flagsChanged.set(new_changed)) {
-      user_config.commit();
+    // Through user_config so ConfigJson marks the record modified; setting the
+    // option directly leaves commit() with nothing to write.
+    if(user_config.set("flags_changed", new_changed)) {
+      if(config_store_user()) {
+        config_backup_to_card();
+      }
     }
   }
 
@@ -627,7 +692,7 @@ config_load_settings()
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
 
   // Generate server_secret on first boot (empty after load means the key was
-  // never stored). web_auth_ensure_secret() persists via user_config.commit().
+  // never stored). web_auth_ensure_secret() persists via config_user_commit().
   web_auth_ensure_secret();
 }
 
@@ -697,19 +762,37 @@ void config_changed(String name)
     timeManager.setDhcpEnabled(config_sntp_dhcp());
   } else if(name == "sntp_hostname") {
     timeManager.setHost(sntp_hostname.c_str());
-  } else if(name == "lcd_backlight_timeout") {
+  } else if(name == "lcd_backlight_timeout" || name == "tft_standby_leds_off") {
     // The display task sleeps until its next scheduled update; nudge it so a
-    // new timeout (or "never") applies now rather than at the next state change
+    // new timeout (or "never"), or the LEDs-in-standby switch, applies now
+    // rather than at the next state change
     MicroTask.wakeTask(&lcd);
   }
 #endif
 }
 
-void config_commit(bool factory)
+bool config_commit(bool factory, bool requested)
 {
   ConfigJson &config = factory ? factory_config : user_config;
+  uint32_t unlocked_flags = flags;
+  uint32_t unlocked_flags_changed = flags_changed;
   config.set("factory_write_lock", true);
-  config.commit();
+  if(!factory) {
+    bool saved = config_store_user(requested);
+    if(saved) {
+      config_backup_to_card();
+    }
+    return saved;
+  }
+
+  // Nothing reached the factory record, so it stays writable and the save can be
+  // retried. Set directly because undoing it through config.set() can need heap.
+  bool saved = config_store_factory();
+  if(!saved) {
+    flags = unlocked_flags;
+    flags_changed = unlocked_flags_changed;
+  }
+  return saved;
 }
 
 // Persist user config without touching the factory_write_lock flag.
@@ -717,26 +800,26 @@ void config_commit(bool factory)
 // must not inadvertently lock the factory partition.
 void config_user_commit()
 {
-  user_config.commit();
+  if(config_store_user()) {
+    config_backup_to_card();
+  }
+}
+
+bool config_loaded_from_storage()
+{
+  return config_loaded;
 }
 
 // Persist the notification ack state.
 //
-// Assigning the notification_acks / notification_acks_fw globals directly and
-// then calling commit() does NOT write anything: ConfigJson::commit() returns
-// early unless its _modified flag is set, and that flag is only raised by
-// deserialize() (or reset()) - never by writing the underlying variable a
-// ConfigOptDefinition wraps. Nothing else in a quiet boot dirties the config,
-// so an ack made that way survives in RAM and is gone at the next restart.
-// Routing the write through deserialize() sets the flag, and only when a value
-// actually changed, so an unchanged ack list still costs no EEPROM write.
+// Routed through deserialize() so an unchanged ack list costs no EEPROM write.
 void config_save_notification_acks(const String &acks, const String &fw)
 {
   JsonDocument doc;
   doc["notification_acks"] = acks;
   doc["notification_acks_fw"] = fw;
   if(user_config.deserialize(doc)) {
-    user_config.commit();
+    config_store_user();
   }
 }
 
@@ -768,12 +851,19 @@ const String &config_installer_password()
 
 bool config_installer_password_set(const char *password)
 {
-  // Same route as the ack blob: deserialize() raises the modified flag that
-  // commit() requires, and only when the value really changed.
+  // Same route as the ack blob: only write when the value really changed. A
+  // failed save puts the old password back, so it stays in force and the change
+  // can simply be tried again.
+  String previous = installer_password;
+  bool unsaved = config_user_unsaved;
+
   JsonDocument doc;
   doc["installer_password"] = password;
   if(user_config.deserialize(doc)) {
-    user_config.commit();
+    if(!config_store_user(true)) {
+      installer_password = previous;
+      config_user_unsaved = unsaved;
+    }
   }
   return installer_password == password;
 }
@@ -1130,6 +1220,18 @@ bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, boo
   doc["protocol"] = "-";
   doc["espinfo"] = ESPAL.getChipInfo();
   doc["espflash"] = ESPAL.getFlashChipSize();
+#if defined(ESP32) && !defined(EPOXY_DUINO)
+  // Structured form of espinfo for the UI: model, silicon revision
+  // (major*100+minor, e.g. 2 == v0.2), cores, and PSRAM size (0 when none).
+  doc["chip_model"] = ESP.getChipModel();
+#if ESP_IDF_VERSION_MAJOR >= 5
+  doc["chip_rev"] = (uint32_t)ESP.getChipRevision();          // already major*100+minor
+#else
+  doc["chip_rev"] = (uint32_t)ESP.getChipRevision() * 100;    // IDF 4 reports the major only
+#endif
+  doc["chip_cores"] = (uint32_t)ESP.getChipCores();
+  doc["psram_size"] = (uint32_t)ESP.getPsramSize();
+#endif
   doc["heap_size"] = (uint32_t)ESP.getHeapSize();
   {
     // Cached: see fs_usage.h for why this must not touch the filesystem here.
@@ -1138,6 +1240,13 @@ bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, boo
     doc["littlefs_size"] = lfs_total;
     doc["littlefs_used"] = lfs_used;
   }
+#ifdef ENABLE_SD_CARD
+  if(sd_card_mounted()) {
+    doc["sd_size"] = sd_card_size();
+    doc["sd_used"] = sd_card_used();
+    doc["sd_log_size"] = (uint64_t)SDLOG_CAPACITY * SDLOG_RECORD_BYTES;
+  }
+#endif
   {
     const esp_partition_t *p = esp_ota_get_running_partition();
     doc["app0_size"]   = p ? (uint32_t)p->size : 0;
@@ -1308,5 +1417,7 @@ void config_reset()
   ResetEEPROM();
   LittleFS.format();
   config_load_settings();
+  // After the load, which can commit (and so mirror) the defaults.
+  config_backup_clear();
 }
 
