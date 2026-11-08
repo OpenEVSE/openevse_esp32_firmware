@@ -363,7 +363,7 @@ void DivertTask::initDivertType() {
     JsonDocument doc;
     doc["divert_type"] = divert_type;
     config_deserialize(doc);
-    config_commit();
+    config_commit(false, false);
   }
 }
 //

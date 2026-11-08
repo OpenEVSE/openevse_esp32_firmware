@@ -385,8 +385,14 @@ bool config_set_opt_string(const char *name, const char *value);
 bool config_deserialize(String& json);
 bool config_deserialize(const char *json);
 bool config_deserialize(JsonDocument &doc);
-void config_commit(bool factory = false);
+// False if the save was refused or failed. `requested` says someone asked for this
+// change: only then may a user save replace a stored config that could not be read.
+// Boot-time and background saves pass false, and stay blocked while it is preserved.
+bool config_commit(bool factory = false, bool requested = true);
 void config_user_commit();  // persist user config without touching factory_write_lock
+
+// True when a save of this record failed and nothing has stored its settings since
+bool config_has_unsaved_changes(bool factory);
 bool config_loaded_from_storage();  // false when boot found no stored config (defaults in use)
 // Persist notification_acks / notification_acks_fw. Writing those globals and
 // calling commit() is not enough - see the definition.

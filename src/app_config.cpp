@@ -538,8 +538,47 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualMaskedBool(flags2Opt, flags2Changed, CONFIG2_LABS_ENABLED, CONFIG2_LABS_ENABLED, "labs_enabled", "labs")
 };
 
-ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET);
+ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET, CONFIG_SIZE);
 ConfigJson factory_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, FACTORY_OFFSET);
+
+// Set at boot when a stored user config exists but can't be read. Defaults are in
+// RAM by then, and saving them would turn what may be a passing fault into
+// permanent loss, so only a successful save of a change someone asked for may
+// replace that record, and that save is what clears this.
+// The factory record is checked separately at load and isn't covered.
+static bool config_storage_held = false;
+
+// Set when a save failed, so RAM holds settings the record doesn't. A retry of the
+// same request changes nothing in RAM and would otherwise never reach storage.
+static bool config_user_unsaved = false;
+static bool config_factory_unsaved = false;
+
+// Saves go through ConfigJson::commit(), which refuses a record that didn't render
+// in full or doesn't fit its region, and leaves the stored record alone then.
+static bool config_store_user(bool requested = false)
+{
+  if(config_storage_held && !requested) {
+    DBUGLN("Config not saved: stored config is unreadable");
+    return false;
+  }
+
+  config_user_unsaved = !user_config.commit();
+  if(!config_user_unsaved) {
+    config_storage_held = false;
+  }
+  return !config_user_unsaved;
+}
+
+static bool config_store_factory()
+{
+  config_factory_unsaved = !factory_config.commit();
+  return !config_factory_unsaved;
+}
+
+bool config_has_unsaved_changes(bool factory)
+{
+  return factory ? config_factory_unsaved : config_user_unsaved;
+}
 
 // Whether user_config.load() found a stored config at boot (false = running on
 // defaults). Read by boot to decide whether a card mirror should be restored.
@@ -588,6 +627,13 @@ config_load_settings()
 {
   user_config.onChanged(config_changed);
 
+  config_user_unsaved = false;
+  config_factory_unsaved = false;
+  config_storage_held = user_config.storedUnreadable();
+  if(config_storage_held) {
+    DBUGLN("Stored config is unreadable, keeping it and running on defaults");
+  }
+
   factory_config.load(false);
   config_loaded = user_config.load(true);
   if(!config_loaded)
@@ -631,9 +677,12 @@ config_load_settings()
 #endif
 
     // Save any changes
-    if(flagsChanged.set(new_changed)) {
-      user_config.commit();
-      config_backup_to_card();
+    // Through user_config so ConfigJson marks the record modified; setting the
+    // option directly leaves commit() with nothing to write.
+    if(user_config.set("flags_changed", new_changed)) {
+      if(config_store_user()) {
+        config_backup_to_card();
+      }
     }
   }
 
@@ -641,7 +690,7 @@ config_load_settings()
   flags |= CONFIG_DEFAULT_FLAGS & ~flags_changed;
 
   // Generate server_secret on first boot (empty after load means the key was
-  // never stored). web_auth_ensure_secret() persists via user_config.commit().
+  // never stored). web_auth_ensure_secret() persists via config_user_commit().
   web_auth_ensure_secret();
 }
 
@@ -720,14 +769,28 @@ void config_changed(String name)
 #endif
 }
 
-void config_commit(bool factory)
+bool config_commit(bool factory, bool requested)
 {
   ConfigJson &config = factory ? factory_config : user_config;
+  uint32_t unlocked_flags = flags;
+  uint32_t unlocked_flags_changed = flags_changed;
   config.set("factory_write_lock", true);
-  config.commit();
   if(!factory) {
-    config_backup_to_card();
+    bool saved = config_store_user(requested);
+    if(saved) {
+      config_backup_to_card();
+    }
+    return saved;
   }
+
+  // Nothing reached the factory record, so it stays writable and the save can be
+  // retried. Set directly because undoing it through config.set() can need heap.
+  bool saved = config_store_factory();
+  if(!saved) {
+    flags = unlocked_flags;
+    flags_changed = unlocked_flags_changed;
+  }
+  return saved;
 }
 
 // Persist user config without touching the factory_write_lock flag.
@@ -735,8 +798,9 @@ void config_commit(bool factory)
 // must not inadvertently lock the factory partition.
 void config_user_commit()
 {
-  user_config.commit();
-  config_backup_to_card();
+  if(config_store_user()) {
+    config_backup_to_card();
+  }
 }
 
 bool config_loaded_from_storage()
@@ -746,21 +810,14 @@ bool config_loaded_from_storage()
 
 // Persist the notification ack state.
 //
-// Assigning the notification_acks / notification_acks_fw globals directly and
-// then calling commit() does NOT write anything: ConfigJson::commit() returns
-// early unless its _modified flag is set, and that flag is only raised by
-// deserialize() (or reset()) - never by writing the underlying variable a
-// ConfigOptDefinition wraps. Nothing else in a quiet boot dirties the config,
-// so an ack made that way survives in RAM and is gone at the next restart.
-// Routing the write through deserialize() sets the flag, and only when a value
-// actually changed, so an unchanged ack list still costs no EEPROM write.
+// Routed through deserialize() so an unchanged ack list costs no EEPROM write.
 void config_save_notification_acks(const String &acks, const String &fw)
 {
   JsonDocument doc;
   doc["notification_acks"] = acks;
   doc["notification_acks_fw"] = fw;
   if(user_config.deserialize(doc)) {
-    user_config.commit();
+    config_store_user();
   }
 }
 
@@ -792,12 +849,19 @@ const String &config_installer_password()
 
 bool config_installer_password_set(const char *password)
 {
-  // Same route as the ack blob: deserialize() raises the modified flag that
-  // commit() requires, and only when the value really changed.
+  // Same route as the ack blob: only write when the value really changed. A
+  // failed save puts the old password back, so it stays in force and the change
+  // can simply be tried again.
+  String previous = installer_password;
+  bool unsaved = config_user_unsaved;
+
   JsonDocument doc;
   doc["installer_password"] = password;
   if(user_config.deserialize(doc)) {
-    user_config.commit();
+    if(!config_store_user(true)) {
+      installer_password = previous;
+      config_user_unsaved = unsaved;
+    }
   }
   return installer_password == password;
 }

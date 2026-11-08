@@ -17,7 +17,7 @@ typedef const __FlashStringHelper *fstr_t;
 #include <vector>
 
 extern bool isPositive(MongooseHttpServerRequest *request, const char *param);
-extern bool web_server_config_deserialise(JsonDocument &doc, bool factory);
+extern bool web_server_config_deserialise(JsonDocument &doc, bool factory, bool *saved = nullptr);
 
 // -------------------------------------------------------------------
 // Returns OpenEVSE Config json
@@ -204,7 +204,8 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
       loadSharingGroupState.resetRole();
     }
 
-    bool config_modified = web_server_config_deserialise(doc, storage.equals("factory"));
+    bool config_saved = true;
+    bool config_modified = web_server_config_deserialise(doc, storage.equals("factory"), &config_saved);
     if (config_modified && loadsharingConfigRequest &&
         loadSharingGroupState.isController()) {
       loadSharingPeerPoller.pushConfigToAllPeers();
@@ -212,9 +213,9 @@ handleConfigPost(MongooseHttpServerRequest *request, MongooseHttpServerResponseS
 
     JsonDocument reply;
     reply["config_version"] = config_version();
-    reply["msg"] = config_modified ? "done" : "no change";
+    reply["msg"] = !config_saved ? "save failed" : (config_modified ? "done" : "no change");
 
-    response->setCode(200);
+    response->setCode(config_saved ? 200 : 500);
     serializeJson(reply, *response);
   } else {
     response->setCode(400);
@@ -242,13 +243,19 @@ void handleConfig(MongooseHttpServerRequest *request)
   request->send(response);
 }
 
-bool web_server_config_deserialise(JsonDocument &doc, bool factory)
+// Returns whether the config changed or an earlier failed save was stored by this
+// call. `saved` is only cleared when the settings could not be stored; a change is
+// still live in RAM then, so the next call tries again even if nothing differs.
+bool web_server_config_deserialise(JsonDocument &doc, bool factory, bool *saved)
 {
-  bool config_modified = config_deserialize(doc);
+  bool config_modified = config_deserialize(doc) || config_has_unsaved_changes(factory);
 
   if(config_modified)
   {
-    config_commit(factory);
+    bool stored = config_commit(factory);
+    if(saved) {
+      *saved = stored;
+    }
     DBUGLN("Config updated");
   }
 
