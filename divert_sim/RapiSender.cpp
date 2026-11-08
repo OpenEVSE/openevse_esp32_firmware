@@ -41,9 +41,45 @@ RapiSender::RapiSender(Stream * stream) :
   _completeHandler(nullptr),
   _timeout(0),
   _waitingForReply(false),
+  _holdUntil(0),
+  _holding(false),
+  _holdMaxQueued(RAPI_HOLD_MAX_QUEUED),
+  _priority(false),
+  _inFlight(),
   _respBuf{},
   _respBufOrig{}
 {
+}
+
+// The simulator answers every command synchronously (see sendCmdSync()), so
+// nothing is ever queued or in flight: holds, the hold queue cap, priority
+// and retries have nothing to act on. They are kept here so this replacement
+// matches the library's RapiSender API; parseVersion() is inline in
+// RapiSender.h and shared as-is.
+void RapiSender::holdSend(unsigned long ms, size_t maxQueued)
+{
+  _holdUntil = millis() + ms;
+  _holding = true;
+  _holdMaxQueued = maxQueued > queueCapacity() ? queueCapacity() : maxQueued;
+}
+
+bool RapiSender::_sendHeld()
+{
+  if(_holding && (long)(millis() - _holdUntil) < 0) {
+    return true;
+  }
+  _holding = false;
+  return false;
+}
+
+bool RapiSender::_retryInFlight(int /*result*/)
+{
+  return false;
+}
+
+bool RapiSender::flush(unsigned long /*timeout*/)
+{
+  return true;
 }
 
 void RapiSender::_sendNextCmd()
@@ -56,7 +92,7 @@ void
 RapiSender::_sendCmd(const char *cmdstr) {
 }
 
-void RapiSender::_sendTail(uint8_t chk) {
+void RapiSender::_sendTail(uint8_t chk, bool /*addSeq*/) {
 }
 
 // return = 0 = OK
