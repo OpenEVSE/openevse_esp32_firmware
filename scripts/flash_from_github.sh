@@ -76,7 +76,7 @@
 # image, and depending on the target: esptool.py, curl, or espota.py. None of
 # these need to be on PATH -- if they aren't, this also looks inside
 # PlatformIO's own installs ($PLATFORMIO_CORE_DIR, ~/.platformio and
-# ~/.platformio-core3 / $PIO_CORE3_DIR -- see scripts/pio), since espota.py in
+# ~/.platformio-core2 / $PIO_CORE2_DIR -- see scripts/pio), since espota.py in
 # particular ships only with the arduino-esp32 core's tools/, not PyPI.
 set -euo pipefail
 
@@ -102,12 +102,12 @@ usage() {
 
 # PlatformIO core dirs to search when a tool isn't on PATH, in the order
 # scripts/pio itself picks them: an explicit PLATFORMIO_CORE_DIR first, then
-# the core-2 default (~/.platformio) and the core-3 dir (~/.platformio-core3,
-# or $PIO_CORE3_DIR).
+# the default (~/.platformio, core 3) and the core-2 dir (~/.platformio-core2,
+# or $PIO_CORE2_DIR).
 pio_core_dirs() {
   [ -n "${PLATFORMIO_CORE_DIR:-}" ] && printf '%s\n' "$PLATFORMIO_CORE_DIR"
   printf '%s\n' "$HOME/.platformio"
-  printf '%s\n' "${PIO_CORE3_DIR:-$HOME/.platformio-core3}"
+  printf '%s\n' "${PIO_CORE2_DIR:-$HOME/.platformio-core2}"
 }
 
 # find_pio_tool RELATIVE_PATH -- prints the first match for RELATIVE_PATH
@@ -383,7 +383,7 @@ elif [ -n "$http_host" ]; then
 else
   espota_bin=$(command -v espota.py 2>/dev/null) \
     || espota_bin=$(find_pio_tool "packages/framework-arduinoespressif32/tools/espota.py") \
-    || die "espota.py not found on PATH or in a PlatformIO install (~/.platformio, ~/.platformio-core3) -- it ships with the arduino-esp32 core's tools/ directory, not PyPI"
+    || die "espota.py not found on PATH or in a PlatformIO install (~/.platformio, ~/.platformio-core2) -- it ships with the arduino-esp32 core's tools/ directory, not PyPI"
   "$espota_bin" -i "$ota_host" -p 3232 -f "$fw_bin"
 fi
 
