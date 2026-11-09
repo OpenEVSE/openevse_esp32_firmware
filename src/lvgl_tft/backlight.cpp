@@ -20,3 +20,8 @@ bool bl_should_standby(bool keep_awake, uint32_t timeout_s, uint32_t idle_ms)
   // uint64_t keeps the multiply identical on the 32-bit device and 64-bit host.
   return idle_ms >= (uint64_t)timeout_s * 1000u;
 }
+
+bool bl_leds_dark(bool standby, bool leds_off_in_standby)
+{
+  return standby && leds_off_in_standby;
+}

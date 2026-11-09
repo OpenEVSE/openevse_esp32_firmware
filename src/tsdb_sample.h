@@ -29,3 +29,41 @@ struct EnergySample {
 void tsdb_scale_sample(const EnergySample &s, int16_t *out);
 // Unscale one column index back to engineering units (double). SoC stays -1 if invalid.
 double tsdb_unscale(uint8_t col, int16_t raw);
+
+// Sample cadence. Internal flash wears, so it gets one sample a minute while
+// charging and one every five minutes idle. The card does not care, so it gets
+// six times the resolution. Idle samples carry only temperature either way.
+#ifndef TSDB_ENERGY_SAMPLE_MS
+#define TSDB_ENERGY_SAMPLE_MS          60000UL
+#endif
+#ifndef TSDB_ENERGY_IDLE_SAMPLE_MS
+#define TSDB_ENERGY_IDLE_SAMPLE_MS     (5UL * 60000UL)
+#endif
+#ifndef TSDB_ENERGY_SD_SAMPLE_MS
+#define TSDB_ENERGY_SD_SAMPLE_MS       10000UL
+#endif
+#ifndef TSDB_ENERGY_SD_IDLE_SAMPLE_MS
+#define TSDB_ENERGY_SD_IDLE_SAMPLE_MS  60000UL
+#endif
+
+static inline unsigned long tsdb_sample_interval_ms(bool charging, bool on_card)
+{
+  if(on_card) {
+    return charging ? TSDB_ENERGY_SD_SAMPLE_MS : TSDB_ENERGY_SD_IDLE_SAMPLE_MS;
+  }
+  return charging ? TSDB_ENERGY_SAMPLE_MS : TSDB_ENERGY_IDLE_SAMPLE_MS;
+}
+
+// One calendar day's rollup inputs from one store: sample count, energy SUM
+// (Wh) and temperature MAX/MIN (deci-degC). temp_max/temp_min mean nothing
+// when count is 0.
+struct EnergyDayAgg {
+  uint32_t count = 0;
+  int64_t  energy_wh = 0;
+  int32_t  temp_max = 0;
+  int32_t  temp_min = 0;
+};
+
+// The day across both stores. Each sample is written to exactly one of them,
+// so counts and sums add; an empty part contributes no extremes.
+EnergyDayAgg energy_day_merge(const EnergyDayAgg &a, const EnergyDayAgg &b);

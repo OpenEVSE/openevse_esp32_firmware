@@ -208,6 +208,16 @@ paths:
           $ref: '#/components/responses/UpdateSuccessful'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '500':
+          description: The change was applied but could not be saved, so it will be lost at the next reboot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              examples:
+                Save failed:
+                  value:
+                    msg: save failed
       requestBody:
         content:
           application/json:
@@ -2770,6 +2780,52 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           description: The migration could not be started
+  /sdcard/format:
+    post:
+      operationId: formatSdCard
+      summary: Format the microSD card
+      description: >-
+        Wipes the microSD card and re-creates the energy-log ring and the config
+        mirror. Runs in the background: the response arrives at once and
+        `sd_status` in `/status` goes from `formatting` to `creating log` to
+        `mounted`. Only on boards with a microSD slot (`ENABLE_SD_CARD`).
+      tags:
+        - System
+      responses:
+        '200':
+          description: The format has started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No card is mounted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '405':
+          description: Only POST is accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '409':
+          description: The card is busy with a format or mount already
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: The format could not be started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
   /debug:
     get:
       operationId: getDebugLog

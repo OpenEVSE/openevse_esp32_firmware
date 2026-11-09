@@ -26,3 +26,10 @@ TEST_CASE("bl_should_standby: sleeps only once idle reaches the timeout") {
   CHECK(bl_should_standby(false, 600, 600000));
   CHECK(bl_should_standby(false, 600, 600001));
 }
+
+TEST_CASE("bl_leds_dark: LEDs go dark only in standby with the option on") {
+  CHECK(bl_leds_dark(true, true));
+  CHECK_FALSE(bl_leds_dark(true, false));   // option off: existing behaviour
+  CHECK_FALSE(bl_leds_dark(false, true));   // awake: LEDs follow the EVSE state
+  CHECK_FALSE(bl_leds_dark(false, false));
+}
