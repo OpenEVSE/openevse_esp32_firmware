@@ -29,3 +29,15 @@ double tsdb_unscale(uint8_t col, int16_t raw) {
     default:             return (double)raw;   // volts, energy, pilot
   }
 }
+
+EnergyDayAgg energy_day_merge(const EnergyDayAgg &a, const EnergyDayAgg &b)
+{
+  if (a.count == 0) return b;
+  if (b.count == 0) return a;
+  EnergyDayAgg d;
+  d.count     = a.count + b.count;
+  d.energy_wh = a.energy_wh + b.energy_wh;
+  d.temp_max  = a.temp_max > b.temp_max ? a.temp_max : b.temp_max;
+  d.temp_min  = a.temp_min < b.temp_min ? a.temp_min : b.temp_min;
+  return d;
+}

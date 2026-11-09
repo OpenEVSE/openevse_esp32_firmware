@@ -35,7 +35,14 @@ void web_auth_ensure_secret()
 
 void web_auth_rotate_secret()
 {
-  server_secret = randomHex32();
+  String secret = randomHex32();
+  // Set through the config so ConfigJson marks the record modified; assigning
+  // server_secret directly leaves commit() with nothing to write, and a secret
+  // generated on first boot would be lost at the next reboot.
+  if (!config_set("server_secret", secret)) {
+    // Could not be recorded (e.g. no heap): still use it for this boot.
+    server_secret = secret;
+  }
   // Persist via config_user_commit() — not config_commit(), which also sets
   // the factory_write_lock flag.
   config_user_commit();

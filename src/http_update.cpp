@@ -137,6 +137,10 @@ bool http_update_from_url(String url,
       {
         size_t total = response->contentLength();
         DBUGVAR(total);
+#if defined(EPOXY_DUINO)
+        // Host builds record the URL the update came from (see EpoxyUpdate)
+        EpoxyUpdateSetSource(state->sourceUrl.c_str());
+#endif
         if(Update.isRunning() || http_update_start(state->sourceUrl, total))
         {
           state->startedUpdate = true;

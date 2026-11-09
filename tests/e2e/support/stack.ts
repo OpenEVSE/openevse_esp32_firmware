@@ -1,0 +1,209 @@
+import { ChildProcess, execFile, spawn } from 'node:child_process';
+import { createServer } from 'node:net';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, createWriteStream } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { Device, Emulator, waitFor } from './clients';
+
+/**
+ * One firmware + emulator pair.
+ *
+ *   browser ──HTTP──▶ native firmware ──RAPI over a PTY──▶ socat ──TCP──▶ emulator container (EVSE + car)
+ *
+ * The native firmware is the real firmware compiled for Linux (`pio run -e
+ * native_openevse`) and serves the real embedded web UI. The emulator is the
+ * published Docker image, the same one the integration tests use, so it has
+ * the test-control endpoints (/api/test/*) this suite relies on. As there, the
+ * container serves RAPI over TCP and socat gives the firmware a PTY.
+ *
+ * Environment:
+ *   NATIVE_BINARY_PATH   firmware binary (default ../../.pio/build/native_openevse/program)
+ *   E2E_EMULATOR_IMAGE   emulator image (default ghcr.io/jeremypoulter/openevse_emulator:latest)
+ *   E2E_PORT_BASE        first TCP port; each worker uses a block of 10 (default 18000)
+ *   E2E_VERBOSE=1        mirror firmware/emulator console output to the terminal
+ *
+ * Needs Docker and socat on the host.
+ */
+
+const e2eRoot = path.resolve(__dirname, '..');
+const repoRoot = path.resolve(e2eRoot, '..', '..');
+const emulatorImage = process.env.E2E_EMULATOR_IMAGE ?? 'ghcr.io/jeremypoulter/openevse_emulator:latest';
+const execFileAsync = promisify(execFile);
+
+function resolveBinary(): string {
+  const candidates = [
+    process.env.NATIVE_BINARY_PATH,
+    path.join(repoRoot, '.pio/build/native_openevse/program'),
+  ].filter((p): p is string => !!p);
+  const found = candidates.find((p) => existsSync(p));
+  if (!found) {
+    throw new Error(
+      `Native firmware binary not found (looked in: ${candidates.join(', ')}). ` +
+        'Build it with `pio run -e native_openevse` or set NATIVE_BINARY_PATH.',
+    );
+  }
+  return found;
+}
+
+/** Fails before anything starts when another process already holds the port. */
+function assertPortFree(port: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once('error', () =>
+      reject(new Error(`port ${port} is already in use; set E2E_PORT_BASE to a free block`)),
+    );
+    server.listen(port, () => server.close(() => resolve()));
+  });
+}
+
+async function stop(proc: ChildProcess | undefined) {
+  // A process killed by a signal has a null exitCode and an exit event that has already fired.
+  if (!proc || proc.exitCode !== null || proc.signalCode !== null) return;
+  const exited = new Promise<void>((resolve) => proc.once('exit', () => resolve()));
+  proc.kill('SIGTERM');
+  const timer = setTimeout(() => proc.kill('SIGKILL'), 5000);
+  await exited;
+  clearTimeout(timer);
+}
+
+export class Stack {
+  readonly emulator: Emulator;
+  readonly device: Device;
+  private readonly containerName: string;
+  private emulatorLogs?: ChildProcess;
+  private serialBridge?: ChildProcess;
+  private nativeProc?: ChildProcess;
+  private workdir?: string;
+  private readonly ptyPath: string;
+  private readonly logDir: string;
+  /** Where the native build records the OTA image it received (EpoxyUpdate, see its README). */
+  readonly otaSinkDir: string;
+
+  private constructor(
+    readonly workerIndex: number,
+    private readonly nativePort: number,
+    private readonly emulatorPort: number,
+    private readonly rapiPort: number,
+  ) {
+    this.emulator = new Emulator(`http://127.0.0.1:${emulatorPort}`);
+    this.device = new Device(`http://127.0.0.1:${nativePort}`);
+    this.containerName = `openevse_e2e_emulator_${process.pid}_${workerIndex}`;
+    this.ptyPath = path.join(tmpdir(), `openevse_e2e_pty_${process.pid}_${workerIndex}`);
+    this.logDir = path.join(e2eRoot, 'output', `worker-${workerIndex}`);
+    this.otaSinkDir = path.join(this.logDir, 'ota-sink');
+    mkdirSync(this.otaSinkDir, { recursive: true });
+  }
+
+  get deviceUrl() {
+    return this.device.url;
+  }
+
+  static async start(workerIndex: number): Promise<Stack> {
+    const base = Number(process.env.E2E_PORT_BASE ?? 18000) + workerIndex * 10;
+    await Promise.all([base, base + 1, base + 2].map(assertPortFree));
+    const stack = new Stack(workerIndex, base, base + 1, base + 2);
+    try {
+      await stack.startEmulator();
+      await stack.startNative();
+    } catch (e) {
+      await stack.stop();
+      throw e;
+    }
+    return stack;
+  }
+
+  /** Clean slate for the next scenario: car, faults, time scale, device config and OTA record. */
+  async reset() {
+    await stop(this.nativeProc);
+    await this.emulator.reset();
+    rmSync(this.otaSinkDir, { recursive: true, force: true });
+    mkdirSync(this.otaSinkDir, { recursive: true });
+    await this.startNative();
+  }
+
+  /** Restart only the firmware, keeping its stored config (for persistence checks). */
+  async restartDevice() {
+    await stop(this.nativeProc);
+    await this.startNative(true);
+  }
+
+  async stop() {
+    await stop(this.nativeProc);
+    await stop(this.serialBridge);
+    await execFileAsync('docker', ['rm', '-f', this.containerName]).catch(() => undefined);
+    await stop(this.emulatorLogs);
+    if (this.workdir) rmSync(this.workdir, { recursive: true, force: true });
+    rmSync(this.ptyPath, { force: true });
+  }
+
+  private pipeOutput(proc: ChildProcess, name: string) {
+    const log = createWriteStream(path.join(this.logDir, `${name}.log`), { flags: 'a' });
+    for (const stream of [proc.stdout, proc.stderr]) {
+      stream?.on('data', (chunk) => {
+        log.write(chunk);
+        if (process.env.E2E_VERBOSE) process.stderr.write(`[${name}${this.workerIndex}] ${chunk}`);
+      });
+    }
+    proc.once('exit', () => log.end());
+  }
+
+  private async startEmulator() {
+    rmSync(this.ptyPath, { force: true });
+    // Same container setup as tests/integration/conftest.py: RAPI over TCP,
+    // published on loopback only, since these are test instances with no auth.
+    await execFileAsync('docker', ['rm', '-f', this.containerName]).catch(() => undefined);
+    await execFileAsync('docker', [
+      'run', '-d', '--name', this.containerName,
+      '-p', `127.0.0.1:${this.emulatorPort}:8080`,
+      '-p', `127.0.0.1:${this.rapiPort}:8023`,
+      '-e', 'WEB_PORT=8080',
+      '-e', 'SERIAL_MODE=tcp',
+      '-e', 'SERIAL_TCP_PORT=8023',
+      '-e', 'PYTHONUNBUFFERED=1',
+      emulatorImage,
+    ]);
+    this.emulatorLogs = spawn('docker', ['logs', '-f', '--tail=all', this.containerName]);
+    this.pipeOutput(this.emulatorLogs, 'emulator');
+    await waitFor('emulator HTTP API', async () => (await this.emulator.status()).evse, 30_000);
+    // Bridge the emulator's TCP RAPI port to the PTY the firmware opens, as the
+    // integration harness does. Dialling only after the HTTP API is up means the
+    // TCP side is ready before the firmware's first RAPI probe.
+    this.serialBridge = spawn('socat', [`PTY,link=${this.ptyPath},rawer`, `TCP:127.0.0.1:${this.rapiPort}`]);
+    this.pipeOutput(this.serialBridge, 'serial');
+    await waitFor('emulator PTY', async () => existsSync(this.ptyPath), 10_000);
+  }
+
+  private async startNative(keepConfig = false) {
+    if (!keepConfig || !this.workdir) {
+      if (this.workdir) rmSync(this.workdir, { recursive: true, force: true });
+      this.workdir = mkdtempSync(path.join(tmpdir(), 'openevse_e2e_fw_'));
+    }
+    this.nativeProc = spawn(
+      resolveBinary(),
+      [
+        '--rapi-serial', this.ptyPath,
+        '--set-config', `www_http_port=${this.nativePort}`,
+        '--set-config', `hostname=openevse-e2e-${this.workerIndex}`,
+      ],
+      {
+        cwd: this.workdir,
+        env: {
+          ...process.env,
+          OPENEVSE_CHIP_ID: `1234567890ab${this.workerIndex.toString(16).padStart(4, '0')}`,
+          EPOXY_UPDATE_SINK_DIR: this.otaSinkDir,
+        },
+      },
+    );
+    this.pipeOutput(this.nativeProc, 'firmware');
+    // HTTP being up does not mean the first RAPI exchange has happened yet.
+    await waitFor(
+      'firmware to report an EVSE state',
+      async () => {
+        const s = await this.device.status();
+        return s.evse_connected === 1 && typeof s.state === 'number' ? s : undefined;
+      },
+      30_000,
+    );
+  }
+}

@@ -38,6 +38,7 @@ pio run -e adafruit_huzzah32
 pio run -e nodemcu-32s
 pio run -e olimex_esp32-gateway-e      # wired Ethernet
 pio run -e openevse_wifi_tft_v1        # TFT touchscreen
+pio run -e openevse_s3_lcd             # ESP32-S3 WiFi/LCD board
 pio run -e openevse_wifi_v1_rc522      # MFRC522/RC522 on SPI (instead of PN532)
 pio run -e wt32-eth01                  # Ethernet (WT32)
 pio run -e olimex_esp32-poe-iso        # Ethernet + PoE
@@ -61,6 +62,7 @@ dependency management updates). The 4MB boards opt into core 2 by extending
 |---|---|---|---|---|
 | 16MB+ (`openevse_wifi_v1_16mb`, `openevse_wifi_tft_v1[_dev]`) | `env:core_3` (default) | `espressif32@8.0.0` | core **3.x** / IDF5 | Larger flash / newer silicon needs the core-3 toolchain. These are hybrid `framework = arduino, espidf` builds. |
 | 4MB (`openevse_wifi_v1`, gateways, huzzah, …) | `env:core_2` | `espressif32@7.1.3` | core **2.x** / IDF4 | Keeps the image small enough for **dual-slot OTA** on 4MB flash. The core-3 build of these images did not fit the app slot. |
+| ESP32-S3 (`openevse_s3_lcd`) | `env:core_3` (default) | `espressif32@8.0.0` | core **3.x** / IDF5 | S3 silicon only exists on core-3; there is no core-2 fallback. Custom board definition in `boards/openevse_s3_lcd.json`. See [ESP32-S3 LCD board](../hardware/esp32-s3-lcd.md). |
 
 A new firmware env picks its core by extending one of the two.
 
