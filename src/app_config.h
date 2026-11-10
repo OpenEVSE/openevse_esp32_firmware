@@ -122,6 +122,7 @@ extern uint32_t scheduler_start_window;
 // Load Sharing settings
 extern bool loadsharing_enabled;
 extern String loadsharing_group_id;
+extern String loadsharing_group_key;
 extern double loadsharing_group_max_current;
 extern double loadsharing_safety_factor;
 extern uint32_t loadsharing_heartbeat_timeout;

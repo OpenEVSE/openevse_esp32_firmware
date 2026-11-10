@@ -8,11 +8,15 @@
 #include "app_config.h"
 #include "input.h"
 #include "evse_man.h"
+#include "loadsharing_auth.h"
 #include "loadsharing_discovery_task.h"
+#include "loadsharing_peer_client.h"
 #include "loadsharing_peer_poller.h"
 #include "loadsharing_types.h"
 #include "debug.h"
+#include <esp_random.h>
 #include <espal.h>
+#include <string>
 #include <vector>
 #include <ArduinoJson.h>
 #include <MongooseHttpClient.h>
@@ -29,37 +33,86 @@ static MongooseHttpClient loadSharingHttpClient;
  */
 static void syncPeerGroupMembership(const String &peerHost, const String &jsonBody)
 {
-  String *url = new String("http://" + peerHost + "/loadsharing/peers");
-  String *body = new String(jsonBody);
-  DBUGF("[LoadSharing] Reciprocal sync POST %s: %s", url->c_str(), body->c_str());
+  String baseUrl = "http://" + peerHost;
+  DBUGF("[LoadSharing] Reciprocal sync POST %s: %s", baseUrl.c_str(), jsonBody.c_str());
 
-  MongooseHttpClientRequest *req = loadSharingHttpClient.beginRequest(url->c_str());
-  req->setMethod(HTTP_POST);
-  req->setContentType("application/json");
-  req->setContent(body->c_str());
+  loadSharingAuthorisePeerRequest(baseUrl, "POST", "/loadsharing/peers", jsonBody,
+                                  [peerHost, baseUrl, jsonBody](const String &authorization) {
+    String url = baseUrl + "/loadsharing/peers";
+    MongooseHttpClientRequest *req = loadSharingHttpClient.beginRequest(url.c_str());
+    req->setMethod(HTTP_POST);
+    req->setContentType("application/json");
+    req->setContent(jsonBody.c_str());
+    if (!authorization.isEmpty()) {
+      req->addHeader("Authorization", authorization.c_str());
+    }
 
-  req->onResponse([peerHost](MongooseHttpClientResponse *resp) {
-    DBUGF("[LoadSharing] Reciprocal sync to %s responded %d",
-          peerHost.c_str(), resp->respCode());
+    req->onResponse([peerHost](MongooseHttpClientResponse *resp) {
+      DBUGF("[LoadSharing] Reciprocal sync to %s responded %d",
+            peerHost.c_str(), resp->respCode());
+    });
+
+    req->onClose([peerHost]() {
+      DBUGF("[LoadSharing] Reciprocal sync to %s connection closed", peerHost.c_str());
+    });
+
+    if (!req->send()) {
+      // send() failing means onClose() never fires (it's only reached via a
+      // live connection event), so the request must be torn down here or it
+      // leaks -- and the peer never learns of the add/remove.
+      DBUGF("[LoadSharing] Reciprocal sync to %s failed to send", peerHost.c_str());
+      req->onResponse(MongooseHttpResponseHandler());
+      req->onClose(MongooseSocketCloseHandler());
+      delete req;
+    }
   });
+}
 
-  req->onClose([peerHost, url, body]() {
-    DBUGF("[LoadSharing] Reciprocal sync to %s connection closed", peerHost.c_str());
-    delete url;
-    delete body;
-  });
+// Nonces this device has handed out to load sharing peers (see loadsharing_auth.h)
+static PeerNonceStore peerNonces;
 
-  if (!req->send()) {
-    // send() failing means onClose() never fires (it's only reached via a
-    // live connection event), so the request and these buffers must be torn
-    // down here or they leak -- and the peer never learns of the add/remove.
-    DBUGF("[LoadSharing] Reciprocal sync to %s failed to send", peerHost.c_str());
-    req->onResponse(MongooseHttpResponseHandler());
-    req->onClose(MongooseSocketCloseHandler());
-    delete req;
-    delete url;
-    delete body;
+bool loadSharingIsPeerRequest(MongooseHttpServerRequest *request)
+{
+  MongooseString header = request->headers("Authorization");
+  return header && peer_auth_is_peer_header(std::string(header.c_str(), header.length()));
+}
+
+bool loadSharingPeerAuthorised(MongooseHttpServerRequest *request)
+{
+  if (loadsharing_group_key.isEmpty() || !loadSharingIsPeerRequest(request)) {
+    return false;
   }
+
+  MongooseString header = request->headers("Authorization");
+  std::string nonce;
+  std::string mac;
+  if (!peer_auth_parse(std::string(header.c_str(), header.length()), nonce, mac)) {
+    return false;
+  }
+
+  bool isPost = HTTP_POST == request->method();
+  if (!isPost && HTTP_GET != request->method()) {
+    return false;
+  }
+  const char *method = isPost ? "POST" : "GET";
+
+  MongooseString uri = request->uri();
+  std::string path(uri.c_str(), uri.length());
+  if (!peer_auth_scope_allows(method, path)) {
+    return false;
+  }
+
+  // Only a POST has a body. On a websocket upgrade the body is not copied into
+  // the connection, so it must not be touched.
+  std::string body;
+  if (isPost) {
+    MongooseString requestBody = request->body();
+    body.assign(requestBody.c_str(), requestBody.length());
+  }
+
+  // Signature first, so a forged request can't burn a nonce a real peer holds.
+  return peer_auth_verify(loadsharing_group_key.c_str(), method, path, nonce, body, mac) &&
+         peerNonces.consume(nonce, millis());
 }
 
 // Path prefix constants
@@ -74,6 +127,50 @@ void handleLoadSharingPeersDeleteWithHost(MongooseHttpServerRequest *request, Mo
 void handleLoadSharingPeersUpdateWithHost(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response, const String &host);
 void handleLoadSharingDiscover(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
 void handleLoadSharingStatus(MongooseHttpServerRequest *request, MongooseHttpServerResponseStream *response);
+
+// -------------------------------------------------------------------
+//
+// url: /loadsharing/nonce
+// GET - issue a single-use nonce for a signed peer request
+//
+// Open by design: it is how a peer starts to authenticate, and a nonce is
+// worthless without the group key. 404 tells the peer there is nothing to sign
+// for, because this device has no password or no group key.
+//
+// -------------------------------------------------------------------
+
+void handleLoadSharingNonce(MongooseHttpServerRequest *request)
+{
+  dumpRequest(request);
+
+  MongooseHttpServerResponseStream *response = request->beginResponseStream();
+  response->setContentType(CONTENT_TYPE_JSON);
+  response->addHeader(F("Cache-Control"), F("no-store"));
+
+  if(HTTP_GET != request->method()) {
+    response->setCode(405);
+    response->print("{\"msg\":\"Method not allowed\"}");
+  } else if(www_password == "" || loadsharing_group_key.isEmpty()) {
+    response->setCode(404);
+    response->print("{\"msg\":\"Peer authentication not in use\"}");
+  } else {
+    uint8_t entropy[LOADSHARING_NONCE_BYTES];
+    esp_fill_random(entropy, sizeof(entropy));
+
+    char nonce[LOADSHARING_NONCE_HEX_LEN + 1];
+    for(size_t i = 0; i < sizeof(entropy); i++) {
+      snprintf(nonce + (i * 2), 3, "%02x", entropy[i]);
+    }
+    peerNonces.add(nonce, millis());
+
+    JsonDocument doc;
+    doc["nonce"] = nonce;
+    response->setCode(200);
+    serializeJson(doc, *response);
+  }
+
+  request->send(response);
+}
 
 // -------------------------------------------------------------------
 //
@@ -510,6 +607,9 @@ void web_server_load_sharing_setup(MongooseHttpServer &server)
 
   // Register the /loadsharing/peers endpoint (GET, POST, DELETE)
   server.on("/loadsharing/peers", handleLoadSharingPeers);
+
+  // Register the /loadsharing/nonce endpoint (GET, deliberately unauthenticated)
+  server.on("/loadsharing/nonce", handleLoadSharingNonce);
 
   // Register the /loadsharing/discover endpoint (POST for on-demand discovery)
   server.on("/loadsharing/discover", [](MongooseHttpServerRequest *request) {
