@@ -1,9 +1,11 @@
 # Flash budget — `openevse_wifi_v1` and the other 4MB boards
 
-`platformio.ini` currently defines 24 environments in total: 4 are
+The PlatformIO config (`platformio.ini` and the `platformio_native.ini` and
+`platformio_community.ini` files it loads) currently defines 28 environments
+in total: 4 are
 `native_*` host builds (`native_test`, `native_openevse`,
 `native_openevse_lvgl`, `native_simulator`) with no flash partition at all,
-and of the remaining 20 ESP32 target environments, 17 build against the 4MB
+and of the remaining 24 ESP32 target environments, 17 build against the 4MB
 `min_spiffs.csv`/`min_spiffs_debug.csv` layout, whose app partition is
 **1,966,080 bytes**. That image has been running within a few KB of the
 limit, and in early 2026 it crossed it: CI failed `openevse_wifi_v1` with
