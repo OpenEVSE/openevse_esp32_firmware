@@ -49,7 +49,14 @@ struct PeerConnection {
   bool hasInitialStatus;              // True after first successful status fetch
   bool httpPending;                   // True while HTTP request is in flight
   bool configPushed;                  // True after config has been pushed to this peer
+  bool configPushInFlight;            // True from nonce request until the push's reply
+  unsigned long configPushTime;       // millis() when the in-flight push started
+  unsigned long configPushRetryAfter; // millis() before which a failed push is not retried
+  uint32_t configPushSeq;             // Identifies the current push attempt; stale replies are ignored
   bool identityFetched;               // True after id/name/limits learned from /config
+  bool authRejected;                  // True while the peer is refusing our credential
+  bool wsAuthPending;                 // True while fetching the WebSocket credential
+  uint32_t authGeneration;            // Identifies the latest attempt awaiting a credential
   uint32_t configVersionFetched;      // Peer config_version at last /config fetch
   LoadSharingDemandState demandState; // Persistent under-draw cap for allocation
 
@@ -67,7 +74,14 @@ struct PeerConnection {
     hasInitialStatus(false),
     httpPending(false),
     configPushed(false),
+    configPushInFlight(false),
+    configPushTime(0),
+    configPushRetryAfter(0),
+    configPushSeq(0),
     identityFetched(false),
+    authRejected(false),
+    wsAuthPending(false),
+    authGeneration(0),
     configVersionFetched(0)
   {}
 
@@ -148,12 +162,30 @@ private:
   void startHttpBootstrap(const String& host, PeerConnection& conn);
 
   /**
+   * @brief Send the HTTP GET /status once its credential is ready
+   *
+   * @param host Peer hostname/IP
+   * @param conn PeerConnection reference
+   * @param authorization Authorization header value, or "" for none
+   */
+  void sendHttpBootstrap(const String& host, PeerConnection& conn, const String& authorization);
+
+  /**
    * @brief Initiate WebSocket connection to a peer
    *
    * @param host Peer hostname/IP
    * @param conn PeerConnection reference
    */
   void startWebSocketConnection(const String& host, PeerConnection& conn);
+
+  /**
+   * @brief Open the WebSocket once its credential is ready
+   *
+   * @param host Peer hostname/IP
+   * @param conn PeerConnection reference
+   * @param authorization Authorization header value, or "" for none
+   */
+  void connectWebSocket(const String& host, PeerConnection& conn, const String& authorization);
 
   /**
    * @brief Check WebSocket connection status and handle messages
@@ -202,6 +234,15 @@ private:
    * @param host Peer hostname/IP
    */
   void fetchPeerConfig(const String& host);
+
+  /**
+   * @brief Send the GET /config once its credential is ready
+   *
+   * @param host Peer hostname/IP
+   * @param baseUrl Peer base URL without a trailing slash
+   * @param authorization Authorization header value, or "" for none
+   */
+  void sendPeerConfigFetch(const String& host, const String& baseUrl, const String& authorization);
 
   /**
    * @brief Resolve the base URL used to reach a peer.
@@ -382,7 +423,8 @@ public:
    *
    * @param host Peer hostname/IP
    * @return "" when the peer is connected and fresh, otherwise one of
-   *         "unreachable", "connecting", "stale", or "unknown_peer".
+   *         "auth_failed", "unreachable", "connecting", "stale", or
+   *         "unknown_peer".
    */
   String getPeerConnectionError(const String& host) const;
 

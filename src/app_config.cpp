@@ -216,6 +216,7 @@ uint32_t scheduler_start_window;
 // Load Sharing settings
 bool loadsharing_enabled;
 String loadsharing_group_id;
+String loadsharing_group_key;
 double loadsharing_group_max_current;
 double loadsharing_safety_factor;
 uint32_t loadsharing_heartbeat_timeout;
@@ -476,6 +477,7 @@ ConfigOpt *opts[] =
 // Load Sharing settings
   new ConfigOptDefinition<bool>(loadsharing_enabled, false, "loadsharing_enabled", "lse"),
   new ConfigOptDefinition<String>(loadsharing_group_id, "", "loadsharing_group_id", "lsgi"),
+  new ConfigOptSecret(loadsharing_group_key, "", "loadsharing_group_key", "lsgk"),
   new ConfigOptDefinition<double>(loadsharing_group_max_current, 0.0, "loadsharing_group_max_current", "lsgmc"),
   new ConfigOptDefinition<double>(loadsharing_safety_factor, 1.0, "loadsharing_safety_factor", "lssf"),
   new ConfigOptDefinition<uint32_t>(loadsharing_heartbeat_timeout, 30, "loadsharing_heartbeat_timeout", "lsht"),

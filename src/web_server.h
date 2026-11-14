@@ -67,6 +67,12 @@ bool requestPreProcess(MongooseHttpServerRequest *request, MongooseHttpServerRes
 // (see web_server.cpp); a wrong Basic credential feeds the failed-auth throttle.
 bool isAuthenticated(MongooseHttpServerRequest *request, bool *usedCookie = nullptr, bool *badCredential = nullptr);
 
+// Load sharing peer auth (web_server_loadsharing.cpp). Authorised verifies and
+// spends the nonce, so call it once per request; IsPeerRequest only reads the
+// scheme, letting a handler apply the narrower peer rules after the gate.
+bool loadSharingPeerAuthorised(MongooseHttpServerRequest *request);
+bool loadSharingIsPeerRequest(MongooseHttpServerRequest *request);
+
 void dumpRequest(MongooseHttpServerRequest *request);
 
 void handleLogin(MongooseHttpServerRequest *request, bool isHttps = false);

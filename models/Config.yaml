@@ -376,6 +376,16 @@ properties:
     type: string
     description: |
       User-defined identifier for the load sharing group. All members must use the same group_id.
+  loadsharing_group_key:
+    type: string
+    minLength: 0
+    maxLength: 64
+    writeOnly: true
+    description: |
+      Shared key that lets load sharing peers authenticate to each other when `www_password` is set.
+      Empty, or 16 to 64 characters. Enter the same key on every device: it is never pushed by the
+      controller and, unlike the other load sharing fields, stays writable on a member. It signs
+      requests and is not sent to peers. Reads return a placeholder once set.
   loadsharing_group_max_current:
     type: number
     minimum: 0

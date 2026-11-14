@@ -113,7 +113,8 @@ Configuration is stored via `ConfigJson` and exposed on the `/config` endpoint.
 > value = higher priority.
 
 > **Invariant**: On a member device (`loadsharing_role == true`), load
-> sharing configuration fields MUST be read-only.  POST/DELETE to
+> sharing configuration fields MUST be read-only, except
+> `loadsharing_group_key` (INV-7).  POST/DELETE to
 > `/loadsharing/peers` MUST return HTTP 403.
 >
 > **Invariant**: `POST /config` MUST reject writes where
@@ -659,7 +660,8 @@ the basis for test assertions.
 > member is offline, ALL allocations MUST be 0.
 >
 > **INV-5a**: An offline joined member MUST be reported with a machine-readable
-> `error` on `GET /loadsharing/status` (`unreachable`, `connecting`, `stale`),
+> `error` on `GET /loadsharing/status` (`auth_failed`, `unreachable`,
+> `connecting`, `stale`),
 > and an active failsafe MUST carry a `failsafe_reason`.  A group must never
 > derate silently.
 
@@ -674,7 +676,10 @@ the basis for test assertions.
 ### 10.6  Config Consistency
 
 > **INV-7**: Member devices MUST reject local writes to load sharing config
-> fields when `loadsharing_role == true`.
+> fields when `loadsharing_role == true`.  The exception is
+> `loadsharing_group_key`, which MUST stay writable on a member: it is entered
+> on each device by hand and the controller never pushes it (see
+> [load-sharing-peer-auth.md](load-sharing-peer-auth.md)).
 
 ### 10.7  Reciprocal Sync
 
