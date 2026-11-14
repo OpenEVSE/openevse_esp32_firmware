@@ -2659,7 +2659,19 @@ static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
 
   SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
   {
+    // Not re-entrant: if the WebSocket send cannot grow its buffer, Mongoose
+    // logs the failure to this same debug port, which lands back here and
+    // tries to send again -- recursing until loopTask's stack overflows (seen
+    // during a low-heap online update with the console open). Output written
+    // while a send is in progress still goes to the serial port; it is just
+    // not forwarded to the console.
+    static bool sending = false;
+    if(sending) {
+      return;
+    }
+    sending = true;
     web_server_send_all("/debug/console", buffer, size);
+    sending = false;
   });
 
   server.on("/evse", [](MongooseHttpServerRequest *request) {
