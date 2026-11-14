@@ -125,15 +125,30 @@ jobs:
 
     strategy:
       fail-fast: false
+      # Order matters. The matrix has more jobs than the account runs at once,
+      # and GitHub starts them roughly in this order, so the jobs listed last
+      # are the ones left queued. OpenEVSE's own boards come first, slowest
+      # first (the core-3.x / ESP-IDF builds take several times longer than the
+      # rest), so they never wait for a runner; community boards fill in after.
       matrix:
         env:
+          # core-3.x (espressif32 8.0.0 / IDF5) — ESP32-S3 (docs/hardware/esp32-s3-lcd.md)
+          - openevse_s3_lcd
+          - openevse_s3_lcd_dev
+          # core-3.x — 16MB+ boards
+          - openevse_wifi_v1_16mb
+          # core-3.x — TFT board
+          - openevse_wifi_tft_v1
+          - openevse_wifi_tft_v1_dev
+          - openevse_wifi_v1
+          - openevse_wifi_v1_rc522
+          - native_openevse
+          # Community boards
           - nodemcu-32s
           - espressif_esp-wrover-kit
           - adafruit_huzzah32_dev
           - adafruit_huzzah32
           - adafruit_featheresp32
-          - openevse_wifi_v1
-          - openevse_wifi_v1_rc522
           - olimex_esp32-gateway-old
           - olimex_esp32-gateway-e
           - olimex_esp32-gateway-f
@@ -144,14 +159,6 @@ jobs:
           - wt32-eth01
           - lilygo-t-eth-lite-rtl8201
           - esp32-c3-devkitc-02
-          - openevse_wifi_tft_v1
-          - openevse_wifi_tft_v1_dev
-          # core-3.x (espressif32 8.0.0 / IDF5) — 16MB+ boards
-          - openevse_wifi_v1_16mb
-          # core-3.x — ESP32-S3 (docs/hardware/esp32-s3-lcd.md)
-          - openevse_s3_lcd
-          - openevse_s3_lcd_dev
-          - native_openevse
 
     steps:
     - uses: ammaraskar/gcc-problem-matcher@master
@@ -166,7 +173,34 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
 
-    - name: Cache PlatformIO
+    - name: Pick the cache group
+      # Envs that download the same platform packages and toolchain share one
+      # package cache. This used to be a single key shared by every env
+      # (hashFiles('**/lockfiles') matches no file), so whichever env saved
+      # first owned it -- in practice a 2 MB cache, and every job downloaded
+      # its whole platform and toolchain on every run. A new env falls into
+      # legacy-esp32, which is correct but may re-download a toolchain the
+      # group's cache lacks.
+      #
+      # build_cache: the core-3.x (arduino+espidf) envs compile ESP-IDF itself
+      # on every run, which is most of their 7-10 minutes. Their build output
+      # is cached too, so only changed sources recompile. The legacy envs take
+      # 2-3 minutes and their framework objects are rebuilt anyway (the
+      # per-commit BUILD_TAG define reaches the whole Arduino build), so caching
+      # their output is not worth the space.
+      id: cache_group
+      run: |
+        case "${{ matrix.env }}" in
+          openevse_s3_lcd*)                       group=core3-esp32s3; build=true ;;
+          openevse_wifi_v1_16mb|openevse_wifi_tft_v1*) group=core3-esp32; build=true ;;
+          esp32-c3-*)                             group=legacy-esp32c3; build=false ;;
+          native_*)                               group=native; build=false ;;
+          *)                                      group=legacy-esp32; build=false ;;
+        esac
+        echo "group=$group" >> "$GITHUB_OUTPUT"
+        echo "build_cache=$build" >> "$GITHUB_OUTPUT"
+
+    - name: Cache PlatformIO packages
       uses: actions/cache@v6
       with:
         path: |
@@ -174,8 +208,26 @@ jobs:
           ~/.platformio-core3
         # Include the Python version: the ESP-IDF venv under here is built
         # for whichever interpreter created it, so a 3.15 cache must not be
-        # restored into the 3.14 build.
-        key: ${{ runner.os }}-python-3.14-${{ hashFiles('**/lockfiles') }}
+        # restored into the 3.14 build. The ini files pin the platform
+        # versions, so a platform bump starts a fresh cache.
+        key: ${{ runner.os }}-pio-pkgs-${{ steps.cache_group.outputs.group }}-py3.14-${{ hashFiles('platformio*.ini') }}
+
+    - name: Cache build output
+      # Exact key only, no restore-keys: a build tree from a different
+      # platform, ini or sdkconfig is not reused. SCons decides what to rebuild
+      # from file contents, so a restored tree from an older commit still
+      # yields a correct build -- only unchanged objects are reused. Tag
+      # (release) builds always start clean.
+      if: steps.cache_group.outputs.build_cache == 'true' && !startsWith(github.ref, 'refs/tags/')
+      uses: actions/cache@v6
+      with:
+        path: |
+          .pio/build/${{ matrix.env }}
+          .pio/libdeps/${{ matrix.env }}
+        # Hash every input of the ESP-IDF configure step: ini files, sdkconfig
+        # defaults and the resolved sdkconfig.<env>, partition tables, and the
+        # CMake / component-manager files.
+        key: ${{ runner.os }}-pio-build-${{ matrix.env }}-py3.14-${{ hashFiles('platformio*.ini', 'sdkconfig*', '*.csv', 'CMakeLists.txt', 'src/CMakeLists.txt', 'src/idf_component.yml') }}
 
     - name: Set up Python
       uses: actions/setup-python@v7
