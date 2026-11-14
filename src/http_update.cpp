@@ -27,28 +27,6 @@ static size_t update_position = 0;
 // reservation below, together with the TLS buffer preallocation further down,
 // make room for each piece before the download needs it.
 
-// Set while an online update is running; services check it via
-// http_update_in_progress() and stand down. Expires if nothing has happened
-// for HTTP_UPDATE_IDLE_TIMEOUT_MS so a download that dies without an error
-// callback cannot keep MQTT down forever.
-#define HTTP_UPDATE_IDLE_TIMEOUT_MS (2 * 60 * 1000UL)
-static bool otaActive = false;
-static unsigned long otaLastActivity = 0;
-
-static void ota_activity()
-{
-  otaLastActivity = millis();
-}
-
-bool http_update_in_progress()
-{
-  if(otaActive && millis() - otaLastActivity > HTTP_UPDATE_IDLE_TIMEOUT_MS) {
-    DEBUG_PORT.println(F("OTA: no progress for 2 minutes, releasing services"));
-    otaActive = false;
-  }
-  return otaActive;
-}
-
 // Update.begin() allocates its SPI_FLASH_SEC_SIZE write buffer only once the
 // image starts to arrive, by which time the TLS connection owns most of the
 // heap. Reserve a block of that size when the download connection is opened
@@ -73,6 +51,42 @@ static void update_reserve_release()
     free(updateReserve);
     updateReserve = nullptr;
   }
+}
+
+// otaActive is set for the lifetime of an online update (start to failure; a
+// success reboots). Services ask http_update_in_progress() and stand down while
+// it is true. It reports false once nothing has happened for
+// HTTP_UPDATE_IDLE_TIMEOUT_MS, so a download that dies without an error
+// callback cannot keep MQTT down forever. If that same download later resumes,
+// its next write refreshes the activity time and services stand down again.
+// A local upload never sets otaActive, so its writes do not affect this.
+#define HTTP_UPDATE_IDLE_TIMEOUT_MS (2 * 60 * 1000UL)
+static bool otaActive = false;
+static unsigned long otaLastActivity = 0;
+static bool otaIdleReported = false;
+
+static void ota_activity()
+{
+  otaLastActivity = millis();
+  otaIdleReported = false;
+}
+
+bool http_update_in_progress()
+{
+  if(!otaActive) {
+    return false;
+  }
+  if(millis() - otaLastActivity > HTTP_UPDATE_IDLE_TIMEOUT_MS) {
+    if(!otaIdleReported) {
+      otaIdleReported = true;
+      // The reservation is only useful while the download is moving; give it
+      // back so the resumed services have it.
+      update_reserve_release();
+      DEBUG_PORT.println(F("OTA: no progress for 2 minutes, releasing services"));
+    }
+    return false;
+  }
+  return true;
 }
 
 static void ota_finished()
@@ -145,11 +159,11 @@ static void ota_wdt_resume()
 
 static void preallocTlsRecvBuffer(MongooseHttpClientRequest *request)
 {
-  // send() has just created the connection with mg_http_connect(), which
-  // links it at the head of the manager's list with the request as fn_data.
-  // ArduinoMongoose has no accessor for the connection, so find it there, and
-  // only touch it when fn_data confirms it is ours.
-  struct mg_connection *nc = Mongoose.getMgr()->conns;
+  // send() has just created the connection with mg_http_connect(); the request
+  // holds it. Do not take the head of the manager's list instead: the first
+  // connect also creates Mongoose's DNS client connection, which is linked
+  // ahead of ours. Only touch it when fn_data confirms it is ours.
+  struct mg_connection *nc = request->getConnection();
   if(nullptr == nc || nc->fn_data != (void *)request) {
     DEBUG_PORT.println(F("OTA: download connection not found, TLS buffer not preallocated"));
     return;
@@ -189,6 +203,17 @@ bool http_update_from_url(String url,
   DBUGF("Update from URL: %s", url.c_str());
 
   if(0 == redirects) {
+    // Only one online update at a time. Refuse before touching any shared
+    // state: a second start would otherwise reset the flag and, through its
+    // own error path, free the running update's reservation. Redirect hops of
+    // the running update arrive with redirects > 0 and are not affected.
+    // Not reported through `error`: that would emit an "ota: failed" event to
+    // the web UI while the first update is still running.
+    if(http_update_in_progress()) {
+      DEBUG_PORT.println(F("OTA: an update is already in progress"));
+      return false;
+    }
+
     // A new update: services stand down until it fails (a success reboots).
     // Every error path below, and on each redirect hop, goes through this
     // wrapper, which is handed on to the hops with the rest of the callbacks.
@@ -397,7 +422,17 @@ bool http_update_from_url(String url,
     // gets the memory back.
     bool expectRedirect = 0 == redirects &&
       (url.startsWith("https://github.com/") || url.startsWith("https://www.github.com/"));
-    if(request->send() && url.startsWith("https://") && !expectRedirect) {
+    if(!request->send()) {
+      // No connection was created, so no onClose will ever run to clean up
+      // or report: do it here, through the (wrapped) error path so services
+      // resume at once rather than after the idle timeout.
+      ota_wdt_resume();
+      delete state;
+      delete request;
+      error(HTTP_UPDATE_ERROR_FAILED_TO_START_UPDATE);
+      return false;
+    }
+    if(url.startsWith("https://") && !expectRedirect) {
       preallocTlsRecvBuffer(request);
       update_reserve_take();
     }
