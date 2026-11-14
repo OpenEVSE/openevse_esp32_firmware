@@ -36,6 +36,12 @@ bool http_update_from_url(String url,
 // before the next one is allocated.
 void http_update_loop();
 
+// True while an online (URL) firmware update is downloading. Network services
+// that are not needed for the update (MQTT, emoncms) stand down while it is
+// set, so the download has the heap it needs; it clears if the update fails,
+// and expires on its own if the download stalls without reporting an error.
+bool http_update_in_progress();
+
 bool http_update_start(String source, size_t total);
 bool http_update_write(uint8_t *data, size_t len);
 bool http_update_end(bool evenIfRemaining = true);

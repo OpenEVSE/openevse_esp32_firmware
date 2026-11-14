@@ -16,6 +16,7 @@
 #include "scheduler.h"
 #include "current_shaper.h"
 #include "home_battery.h"
+#include "http_update.h"
 
 Mqtt mqtt(evse); // global instance
 
@@ -91,6 +92,20 @@ unsigned long Mqtt::loop(MicroTasks::WakeReason reason) {
     }
      _reconnectNow = true; // Force immediate reconnect attempt
      _connecting = false; // Reset connecting flag
+  }
+
+  // An online firmware update needs the heap this connection holds (see
+  // http_update.cpp). Drop it and stay down until the update fails; a
+  // successful update reboots, and a failed one reconnects on the next pass.
+  if (http_update_in_progress()) {
+    if (_mqttclient.connected() || _connecting) {
+      DEBUG_PORT.println(F("MQTT: disconnecting for firmware update"));
+      _mqttclient.disconnect();
+      _connecting = false;
+    }
+    _reconnectNow = true;
+    Profile_End(Mqtt_loop, 5);
+    return MQTT_LOOP_INTERVAL;
   }
 
   // If a connection attempt has been in progress too long with no callback, reset and retry.

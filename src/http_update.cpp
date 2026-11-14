@@ -20,6 +20,67 @@ static int lastPercent = -1;
 static size_t update_total_size = 0;
 static size_t update_position = 0;
 
+// --- Online-update heap budget ---------------------------------------------
+// On the TFT build (~45 KB internal heap free) an online update only just fits:
+// two TLS handshakes (~20 KB each, one after the other), a 16.9 KB TLS record
+// buffer, and Update.begin()'s 4 KB flash-write buffer. The flag and the
+// reservation below, together with the TLS buffer preallocation further down,
+// make room for each piece before the download needs it.
+
+// Set while an online update is running; services check it via
+// http_update_in_progress() and stand down. Expires if nothing has happened
+// for HTTP_UPDATE_IDLE_TIMEOUT_MS so a download that dies without an error
+// callback cannot keep MQTT down forever.
+#define HTTP_UPDATE_IDLE_TIMEOUT_MS (2 * 60 * 1000UL)
+static bool otaActive = false;
+static unsigned long otaLastActivity = 0;
+
+static void ota_activity()
+{
+  otaLastActivity = millis();
+}
+
+bool http_update_in_progress()
+{
+  if(otaActive && millis() - otaLastActivity > HTTP_UPDATE_IDLE_TIMEOUT_MS) {
+    DEBUG_PORT.println(F("OTA: no progress for 2 minutes, releasing services"));
+    otaActive = false;
+  }
+  return otaActive;
+}
+
+// Update.begin() allocates its SPI_FLASH_SEC_SIZE write buffer only once the
+// image starts to arrive, by which time the TLS connection owns most of the
+// heap. Reserve a block of that size when the download connection is opened
+// and free it immediately before Update.begin(), so the allocator has a block
+// of exactly the right size to hand back.
+#define HTTP_UPDATE_RESERVE_SIZE 4096
+static void *updateReserve = nullptr;
+
+static void update_reserve_take()
+{
+  if(nullptr == updateReserve) {
+    updateReserve = malloc(HTTP_UPDATE_RESERVE_SIZE);
+    if(nullptr == updateReserve) {
+      DEBUG_PORT.println(F("OTA: could not reserve the update buffer"));
+    }
+  }
+}
+
+static void update_reserve_release()
+{
+  if(nullptr != updateReserve) {
+    free(updateReserve);
+    updateReserve = nullptr;
+  }
+}
+
+static void ota_finished()
+{
+  update_reserve_release();
+  otaActive = false;
+}
+
 struct HttpUpdateRequestState
 {
   bool startedUpdate = false;
@@ -126,6 +187,21 @@ bool http_update_from_url(String url,
   int redirects)
 {
   DBUGF("Update from URL: %s", url.c_str());
+
+  if(0 == redirects) {
+    // A new update: services stand down until it fails (a success reboots).
+    // Every error path below, and on each redirect hop, goes through this
+    // wrapper, which is handed on to the hops with the rest of the callbacks.
+    otaActive = true;
+    ota_activity();
+    auto reportError = error;
+    error = [reportError](int code) {
+      ota_finished();
+      reportError(code);
+    };
+  } else {
+    ota_activity();
+  }
 
   // Enforced on the initial fetch and on every redirect target (this function
   // is re-entered for 30x Location), so firmware can only come from a trusted
@@ -323,6 +399,7 @@ bool http_update_from_url(String url,
       (url.startsWith("https://github.com/") || url.startsWith("https://www.github.com/"));
     if(request->send() && url.startsWith("https://") && !expectRedirect) {
       preallocTlsRecvBuffer(request);
+      update_reserve_take();
     }
     return true;
   }
@@ -381,6 +458,9 @@ bool http_update_start(String source, size_t total)
   // Pass the expected size so the library can (a) reject an oversized binary
   // before erasing the target partition, and (b) validate completeness at end().
   // Fall back to UPDATE_SIZE_UNKNOWN only when Content-Length is absent.
+  // Hand back the online update's reserved block just before Update.begin()
+  // allocates its write buffer of the same size (no-op for a local upload).
+  update_reserve_release();
   if(Update.begin(total > 0 ? total : UPDATE_SIZE_UNKNOWN))
   {
     DEBUG_PORT.printf("Update Start: %s %zu\n", source.c_str(), total);
@@ -402,6 +482,7 @@ bool http_update_write(uint8_t *data, size_t len)
   // loop watchdog timing out, presumably because updating wasn't bottlenecked
   // by network and execution stayed in the Mongoose poll() method.
   feedLoopWDT();
+  ota_activity();
 
   DBUGF("Update Writing %u, %u", update_position, len);
   size_t written = Update.write(data, len);
