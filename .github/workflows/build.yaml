@@ -190,9 +190,11 @@ jobs:
       # their output is not worth the space.
       id: cache_group
       run: |
+        # The core-3.x ESP32 and ESP32-S3 envs install the same packages
+        # (ESP-IDF, and one unified xtensa-esp-elf toolchain), ~2.4 GB, so they
+        # share one cache rather than storing it twice.
         case "${{ matrix.env }}" in
-          openevse_s3_lcd*)                       group=core3-esp32s3; build=true ;;
-          openevse_wifi_v1_16mb|openevse_wifi_tft_v1*) group=core3-esp32; build=true ;;
+          openevse_s3_lcd*|openevse_wifi_v1_16mb|openevse_wifi_tft_v1*) group=core3-esp32; build=true ;;
           esp32-c3-*)                             group=legacy-esp32c3; build=false ;;
           native_*)                               group=native; build=false ;;
           *)                                      group=legacy-esp32; build=false ;;
