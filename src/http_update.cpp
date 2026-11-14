@@ -11,6 +11,9 @@
 #include "ota_url_allow.h"
 #include <MongooseHttpClient.h>
 #include <Update.h>
+#ifndef EPOXY_DUINO
+#include <esp_heap_caps.h>
+#endif
 
 MongooseHttpClient client;
 static int lastPercent = -1;
@@ -63,6 +66,44 @@ static void ota_wdt_resume()
     enableLoopWDT();
     otaWdtSuspended = false;
     DEBUG_PORT.printf("OTA: TLS handshake took %lu ms\n", millis() - otaWdtSuspendedAt);
+  }
+}
+
+// Mongoose's built-in TLS decrypts only whole records, so it buffers each
+// encrypted record in c->rtls (it reads until 16 KB + 40 bytes are in hand).
+// Left to itself it grows rtls by MG_IO_SIZE (512 B) at a time, and every step
+// allocates the new size before freeing the old one. On a heap-tight build
+// (openevse_wifi_tft_v1 has ~45 KB free) that walk fails a few KB in -- after
+// the handshake has fragmented the heap -- with "mg_iobuf_resize 5632->6144 /
+// OOM", and the download dies on its first 16 KB record (HTTP OTA failed: -4).
+// Allocating the full record buffer once, before the handshake, while the
+// large free block still exists, avoids both the growth and the copies.
+// Size: a TLS 1.3 record is at most 5 + 16384 + 256 bytes; mg_iobuf_resize
+// rounds up to the 512 B alignment, giving 16896.
+#define HTTP_UPDATE_TLS_RECV_BUF (5 + 16 * 1024 + 256)
+
+static void preallocTlsRecvBuffer(MongooseHttpClientRequest *request)
+{
+  // send() has just created the connection with mg_http_connect(), which
+  // links it at the head of the manager's list with the request as fn_data.
+  // ArduinoMongoose has no accessor for the connection, so find it there, and
+  // only touch it when fn_data confirms it is ours.
+  struct mg_connection *nc = Mongoose.getMgr()->conns;
+  if(nullptr == nc || nc->fn_data != (void *)request) {
+    DEBUG_PORT.println(F("OTA: download connection not found, TLS buffer not preallocated"));
+    return;
+  }
+  if(nc->rtls.size >= HTTP_UPDATE_TLS_RECV_BUF) {
+    return;
+  }
+  if(!mg_iobuf_resize(&nc->rtls, HTTP_UPDATE_TLS_RECV_BUF)) {
+    // Not fatal: Mongoose falls back to growing the buffer on demand.
+#ifndef EPOXY_DUINO
+    DEBUG_PORT.printf("OTA: could not preallocate %d B TLS buffer (largest free block %u B)\n",
+      HTTP_UPDATE_TLS_RECV_BUF, (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+#else
+    DEBUG_PORT.printf("OTA: could not preallocate %d B TLS buffer\n", HTTP_UPDATE_TLS_RECV_BUF);
+#endif
   }
 }
 
@@ -272,7 +313,9 @@ bool http_update_from_url(String url,
     });
 
     ota_wdt_suspend();
-    request->send();
+    if(request->send() && state->sourceUrl.startsWith("https")) {
+      preallocTlsRecvBuffer(request);
+    }
     return true;
   }
 
