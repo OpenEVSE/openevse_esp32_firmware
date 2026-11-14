@@ -182,25 +182,21 @@ jobs:
       # legacy-esp32, which is correct but may re-download a toolchain the
       # group's cache lacks.
       #
-      # build_cache: the core-3.x (arduino+espidf) envs compile ESP-IDF itself
-      # on every run, which is most of their 7-10 minutes. Their build output
-      # is cached too, so only changed sources recompile. The legacy envs take
-      # 2-3 minutes and their framework objects are rebuilt anyway (the
-      # per-commit BUILD_TAG define reaches the whole Arduino build), so caching
-      # their output is not worth the space.
+      # Build output (.pio/build) is deliberately not cached: tried on the
+      # core-3.x envs, a restored tree still recompiled all ~2,100 files on
+      # the next commit, so it cost ~0.8 GB of cache for no gain.
       id: cache_group
       run: |
         # The core-3.x ESP32 and ESP32-S3 envs install the same packages
         # (ESP-IDF, and one unified xtensa-esp-elf toolchain), ~2.4 GB, so they
         # share one cache rather than storing it twice.
         case "${{ matrix.env }}" in
-          openevse_s3_lcd*|openevse_wifi_v1_16mb|openevse_wifi_tft_v1*) group=core3-esp32; build=true ;;
-          esp32-c3-*)                             group=legacy-esp32c3; build=false ;;
-          native_*)                               group=native; build=false ;;
-          *)                                      group=legacy-esp32; build=false ;;
+          openevse_s3_lcd*|openevse_wifi_v1_16mb|openevse_wifi_tft_v1*) group=core3-esp32 ;;
+          esp32-c3-*) group=legacy-esp32c3 ;;
+          native_*)   group=native ;;
+          *)          group=legacy-esp32 ;;
         esac
         echo "group=$group" >> "$GITHUB_OUTPUT"
-        echo "build_cache=$build" >> "$GITHUB_OUTPUT"
 
     - name: Cache PlatformIO packages
       uses: actions/cache@v6
@@ -213,23 +209,6 @@ jobs:
         # restored into the 3.14 build. The ini files pin the platform
         # versions, so a platform bump starts a fresh cache.
         key: ${{ runner.os }}-pio-pkgs-${{ steps.cache_group.outputs.group }}-py3.14-${{ hashFiles('platformio*.ini') }}
-
-    - name: Cache build output
-      # Exact key only, no restore-keys: a build tree from a different
-      # platform, ini or sdkconfig is not reused. SCons decides what to rebuild
-      # from file contents, so a restored tree from an older commit still
-      # yields a correct build -- only unchanged objects are reused. Tag
-      # (release) builds always start clean.
-      if: steps.cache_group.outputs.build_cache == 'true' && !startsWith(github.ref, 'refs/tags/')
-      uses: actions/cache@v6
-      with:
-        path: |
-          .pio/build/${{ matrix.env }}
-          .pio/libdeps/${{ matrix.env }}
-        # Hash every input of the ESP-IDF configure step: ini files, sdkconfig
-        # defaults and the resolved sdkconfig.<env>, partition tables, and the
-        # CMake / component-manager files.
-        key: ${{ runner.os }}-pio-build-${{ matrix.env }}-py3.14-${{ hashFiles('platformio*.ini', 'sdkconfig*', '*.csv', 'CMakeLists.txt', 'src/CMakeLists.txt', 'src/idf_component.yml') }}
 
     - name: Set up Python
       uses: actions/setup-python@v7
