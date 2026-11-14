@@ -313,7 +313,15 @@ bool http_update_from_url(String url,
     });
 
     ota_wdt_suspend();
-    if(request->send() && state->sourceUrl.startsWith("https")) {
+    // Only on the hop expected to carry the image. A github.com release URL
+    // always answers with a 302 to its asset CDN; preallocating there leaves
+    // too little heap for the redirect's ~5 KB of response headers (measured:
+    // "mg_iobuf_resize 5120->5632 / OOM" on the TFT build). The first hop's
+    // connection is freed before the redirect is followed, so the CDN hop
+    // gets the memory back.
+    bool expectRedirect = 0 == redirects &&
+      (url.startsWith("https://github.com/") || url.startsWith("https://www.github.com/"));
+    if(request->send() && url.startsWith("https://") && !expectRedirect) {
       preallocTlsRecvBuffer(request);
     }
     return true;
