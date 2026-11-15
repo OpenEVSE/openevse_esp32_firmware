@@ -518,7 +518,10 @@ void http_update_loop()
   http_update_from_url(url, progress, success, error, redirects);
 }
 
-bool http_update_start(String source, size_t total)
+// `source` is taken by reference: an online update passes the asset CDN URL,
+// several hundred bytes long, and copying it while the TLS connection holds
+// most of the heap can fail. A failed String copy has a null buffer.
+bool http_update_start(const String &source, size_t total)
 {
   update_position = 0;
   update_total_size = total;
@@ -550,7 +553,9 @@ bool http_update_start(String source, size_t total)
   update_reserve_release();
   if(Update.begin(total > 0 ? total : UPDATE_SIZE_UNKNOWN))
   {
-    DEBUG_PORT.printf("Update Start: %s %zu\n", source.c_str(), total);
+    // c_str() is null for a String whose allocation failed; %s must not get it.
+    const char *src = source.c_str();
+    DEBUG_PORT.printf("Update Start: %s %zu\n", src ? src : "?", total);
 
     lcd.display(F("Updating WiFi"), 0, 0, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);
     lcd.display(F(""), 0, 1, 10 * 1000, LCD_CLEAR_LINE | LCD_DISPLAY_NOW);

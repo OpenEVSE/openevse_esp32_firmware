@@ -44,7 +44,7 @@ void http_update_loop();
 // including when http_update_loop() aborts a stalled download.
 bool http_update_in_progress();
 
-bool http_update_start(String source, size_t total);
+bool http_update_start(const String &source, size_t total);
 bool http_update_write(uint8_t *data, size_t len);
 bool http_update_end(bool evenIfRemaining = true);
 
