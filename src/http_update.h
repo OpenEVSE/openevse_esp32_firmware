@@ -14,6 +14,7 @@
 #define HTTP_UPDATE_ERROR_INCOMPLETE_DOWNLOAD         -4
 #define HTTP_UPDATE_ERROR_URL_NOT_ALLOWED             -5
 #define HTTP_UPDATE_ERROR_TOO_MANY_REDIRECTS          -6
+#define HTTP_UPDATE_ERROR_STALLED                     -7
 
 #define HTTP_UPDATE_OK                                 0
 
@@ -31,15 +32,16 @@ bool http_update_from_url(String url,
   std::function<void(int)> error,
   int redirects = 0);
 
-// Starts redirects queued by the HTTP callbacks. Call once per main loop,
-// after Mongoose.poll(), so the previous TLS connection has been destroyed
-// before the next one is allocated.
+// Starts redirects queued by the HTTP callbacks, and aborts an online update
+// that has stopped receiving data. Call once per main loop, after
+// Mongoose.poll(), so the previous TLS connection has been destroyed before
+// the next one is allocated.
 void http_update_loop();
 
 // True while an online (URL) firmware update is downloading. Network services
 // that are not needed for the update (MQTT, emoncms) stand down while it is
-// set, so the download has the heap it needs; it clears if the update fails,
-// and expires on its own if the download stalls without reporting an error.
+// set, so the download has the heap it needs. It clears when the update fails,
+// including when http_update_loop() aborts a stalled download.
 bool http_update_in_progress();
 
 bool http_update_start(String source, size_t total);

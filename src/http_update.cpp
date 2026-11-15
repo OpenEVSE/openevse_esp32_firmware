@@ -55,38 +55,28 @@ static void update_reserve_release()
 
 // otaActive is set for the lifetime of an online update (start to failure; a
 // success reboots). Services ask http_update_in_progress() and stand down while
-// it is true. It reports false once nothing has happened for
-// HTTP_UPDATE_IDLE_TIMEOUT_MS, so a download that dies without an error
-// callback cannot keep MQTT down forever. If that same download later resumes,
-// its next write refreshes the activity time and services stand down again.
-// A local upload never sets otaActive, so its writes do not affect this.
-#define HTTP_UPDATE_IDLE_TIMEOUT_MS (2 * 60 * 1000UL)
+// it is true. A download that stops delivering data is aborted by
+// http_update_loop() after HTTP_UPDATE_STALL_TIMEOUT_MS, which reports the
+// failure and clears the flag, so a stall cannot keep services down for good.
+// A local upload never sets otaActive.
+//
+// The stall timeout is needed because nothing else ends a stalled download:
+// the HTTP client only times out while resolving or connecting, and Mongoose
+// 7.23's built-in TLS never closes a connection whose peer went away in the
+// middle of a TLS record -- the partial record stays in c->rtls, which marks
+// the connection readable on every poll, but the record can never complete.
+#define HTTP_UPDATE_STALL_TIMEOUT_MS (60 * 1000UL)
 static bool otaActive = false;
 static unsigned long otaLastActivity = 0;
-static bool otaIdleReported = false;
 
 static void ota_activity()
 {
   otaLastActivity = millis();
-  otaIdleReported = false;
 }
 
 bool http_update_in_progress()
 {
-  if(!otaActive) {
-    return false;
-  }
-  if(millis() - otaLastActivity > HTTP_UPDATE_IDLE_TIMEOUT_MS) {
-    if(!otaIdleReported) {
-      otaIdleReported = true;
-      // The reservation is only useful while the download is moving; give it
-      // back so the resumed services have it.
-      update_reserve_release();
-      DEBUG_PORT.println(F("OTA: no progress for 2 minutes, releasing services"));
-    }
-    return false;
-  }
-  return true;
+  return otaActive;
 }
 
 static void ota_finished()
@@ -116,6 +106,12 @@ struct HttpUpdateRequestState
 // second context can exhaust the ESP32 heap. Queue it until after the current
 // Mongoose.poll() returns instead.
 static HttpUpdateRequestState *pendingRedirect = nullptr;
+
+// The hop that is currently downloading, so a stall can be aborted from
+// http_update_loop(). Set once send() succeeds; cleared by that request's
+// onClose, or by the stall abort.
+static MongooseHttpClientRequest *activeRequest = nullptr;
+static HttpUpdateRequestState *activeState = nullptr;
 
 // Mongoose 7's built-in TLS verifies the certificate chain in software on
 // loopTask. GitHub's chain has a P-384 intermediate, and checking that
@@ -283,7 +279,11 @@ bool http_update_from_url(String url,
         // Host builds record the URL the update came from (see EpoxyUpdate)
         EpoxyUpdateSetSource(state->sourceUrl.c_str());
 #endif
-        if(Update.isRunning() || http_update_start(state->sourceUrl, total))
+        // Only this request's first chunk starts the update; later chunks
+        // continue it. Do not test Update.isRunning() here: a session left
+        // open by another upload would be appended to instead of refused
+        // (Update.begin() fails while a session is running).
+        if(state->startedUpdate || http_update_start(state->sourceUrl, total))
         {
           state->startedUpdate = true;
           uint8_t *data = (uint8_t *)response->body().c_str();
@@ -382,6 +382,11 @@ bool http_update_from_url(String url,
     {
       DBUGLN("Update onClose");
       ota_wdt_resume();
+      if(activeState == state)
+      {
+        activeRequest = nullptr;
+        activeState = nullptr;
+      }
       if(state->redirected)
       {
         if(pendingRedirect)
@@ -432,6 +437,8 @@ bool http_update_from_url(String url,
       error(HTTP_UPDATE_ERROR_FAILED_TO_START_UPDATE);
       return false;
     }
+    activeRequest = request;
+    activeState = state;
     if(url.startsWith("https://") && !expectRedirect) {
       preallocTlsRecvBuffer(request);
       update_reserve_take();
@@ -443,8 +450,53 @@ bool http_update_from_url(String url,
   return false;
 }
 
+// Abort an online update that has received nothing for
+// HTTP_UPDATE_STALL_TIMEOUT_MS: close its connection, discard the partial
+// image and report the failure, which also resumes the stood-down services.
+static void http_update_check_stall()
+{
+  if(!otaActive || millis() - otaLastActivity <= HTTP_UPDATE_STALL_TIMEOUT_MS)
+  {
+    return;
+  }
+
+  DEBUG_PORT.printf("OTA: no data for %lu s, aborting the update\n",
+    HTTP_UPDATE_STALL_TIMEOUT_MS / 1000);
+
+  MongooseHttpClientRequest *request = activeRequest;
+  HttpUpdateRequestState *state = activeState;
+  activeRequest = nullptr;
+  activeState = nullptr;
+  if(request && state)
+  {
+    // Discard the partial image, but only a session this download started:
+    // a stall before the first body byte must not end a local upload.
+    if(state->startedUpdate && Update.isRunning())
+    {
+      Update.abort();
+    }
+    // Mongoose closes the connection on its next poll, even with a partial
+    // TLS record buffered; onClose then frees the state. errorReported stops
+    // onClose reporting the same failure a second time.
+    request->abort();
+    if(!state->errorReported)
+    {
+      state->errorReported = true;
+      state->error(HTTP_UPDATE_ERROR_STALLED);  // wrapped: calls ota_finished()
+    }
+  }
+
+  // No request left to report through: still let the services resume.
+  if(otaActive)
+  {
+    ota_finished();
+  }
+}
+
 void http_update_loop()
 {
+  http_update_check_stall();
+
   if(!pendingRedirect)
   {
     return;
