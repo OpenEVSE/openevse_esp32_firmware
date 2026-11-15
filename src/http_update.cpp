@@ -475,6 +475,12 @@ static void http_update_check_stall()
     {
       Update.abort();
     }
+    // The request is cancelled: its deferred onClose must neither abort an
+    // Update session started in the meantime (by a local upload) nor follow a
+    // 302 it may already have received, which would restart the update with
+    // none of the protection above.
+    state->startedUpdate = false;
+    state->redirected = false;
     // Mongoose closes the connection on its next poll, even with a partial
     // TLS record buffered; onClose then frees the state. errorReported stops
     // onClose reporting the same failure a second time.
@@ -495,27 +501,28 @@ static void http_update_check_stall()
 
 void http_update_loop()
 {
-  http_update_check_stall();
-
-  if(!pendingRedirect)
+  if(pendingRedirect)
   {
-    return;
+    // Clear the queue before starting the request. If it immediately fails,
+    // its error callback is still valid; if it later redirects, the slot is
+    // free for the next hop.
+    HttpUpdateRequestState *redirect = pendingRedirect;
+    pendingRedirect = nullptr;
+
+    String url = redirect->redirectUrl;
+    auto progress = redirect->progress;
+    auto success = redirect->success;
+    auto error = redirect->error;
+    int redirects = redirect->redirects + 1;
+    delete redirect;
+
+    http_update_from_url(url, progress, success, error, redirects);
   }
 
-  // Clear the queue before starting the request. If it immediately fails, its
-  // error callback is still valid; if it later redirects, the slot is free for
-  // the next hop.
-  HttpUpdateRequestState *redirect = pendingRedirect;
-  pendingRedirect = nullptr;
-
-  String url = redirect->redirectUrl;
-  auto progress = redirect->progress;
-  auto success = redirect->success;
-  auto error = redirect->error;
-  int redirects = redirect->redirects + 1;
-  delete redirect;
-
-  http_update_from_url(url, progress, success, error, redirects);
+  // After any queued hop has started: starting it counts as activity, so a
+  // redirect that arrives just as the timeout runs out is followed, not
+  // stranded by an abort that has no active request left to cancel.
+  http_update_check_stall();
 }
 
 // `source` is taken by reference: an online update passes the asset CDN URL,
