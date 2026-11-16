@@ -9,6 +9,13 @@
 #define EVSE_DIVERT_HYSTERESIS 0.5 // A
 #endif
 
+// Minimum time between solar/grid samples applied to the charge calculation.
+// MQTT, HTTP and Shelly all pass through DivertTask::update_state(). Shelly
+// keeps SHELLY_LNM_APPLY_INTERVAL for its own status event.
+#ifndef DIVERT_UPDATE_INTERVAL
+#define DIVERT_UPDATE_INTERVAL 5000 // ms
+#endif
+
 #include <Arduino.h>
 #include <MicroTasks.h>
 
@@ -55,6 +62,8 @@ class DivertTask : public MicroTasks::Task
     DivertMode _mode;
     EvseState _state;
     uint32_t _last_update;
+    bool _applied;         // false until the first sample is applied (_last_update may be 0)
+    bool _update_pending;  // a newer sample arrived inside DIVERT_UPDATE_INTERVAL
     int _charge_rate;
     MicroTasks::EventListener _evseState;
     double _available_current;
@@ -65,6 +74,9 @@ class DivertTask : public MicroTasks::Task
     bool _timer_divert_active;  // true while a scheduler timer window controls divert
     int _solar;
     int _grid_ie;
+    uint32_t _last_data; // millis when setSolar/setGridIe last stored a reading
+
+    bool isUpdateDue(uint32_t now) const;
 
   protected:
     void setup();
@@ -105,10 +117,21 @@ class DivertTask : public MicroTasks::Task
     // Set charge rate depending on charge mode and solarPV output
     void update_state();
 
-    void setSolar(int value) { _solar = value; }
-    void setGridIe(int value) { _grid_ie = value; }
+    void setSolar(int value) {
+      _solar = value;
+      _last_data = millis();
+    }
+    void setGridIe(int value) {
+      _grid_ie = value;
+      _last_data = millis();
+    }
     int getSolar() const { return _solar; }
     int getGridIe() const { return _grid_ie; }
+
+    // Age of the newest stored reading. UINT32_MAX until the first one arrives.
+    uint32_t getDataAge() const {
+      return 0 == _last_data ? UINT32_MAX : millis() - _last_data;
+    }
 
     EvseState getState() {
       return _state;

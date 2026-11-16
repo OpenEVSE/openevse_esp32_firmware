@@ -76,7 +76,9 @@ unsigned long ShellyLnmTask::loop(MicroTasks::WakeReason reason)
     return SHELLY_LNM_RETRY_TIME;
   }
 
-  // Process all queued packets, keep only the most recent values
+  // Process all queued packets, keep only the most recent values. Divert
+  // throttles its own updates, so a new power reading is handed over immediately.
+  bool newPower = false;
   int packetSize;
   while((packetSize = _udp.parsePacket()) > 0)
   {
@@ -87,14 +89,18 @@ unsigned long ShellyLnmTask::loop(MicroTasks::WakeReason reason)
     }
 
     int len = _udp.read(_buffer, SHELLY_LNM_BUFFER_SIZE);
-    if(len > 0) {
-      processPacket(_buffer, len);
+    if(len > 0 && processPacket(_buffer, len)) {
+      newPower = true;
     }
   }
 
-  // Shelly devices report about once per second. Applying every packet would
-  // flood divert, the shaper, events, emoncms and the RAPI queue, and the
-  // smoothing filters work with whole seconds, so apply at a slower pace.
+  if(newPower && DIVERT_TYPE_GRID == divert_type) {
+    divert.setGridIe((int)_power);
+    divert.update_state();
+  }
+
+  // Status events, voltage RAPI and the shaper are not covered by divert's
+  // throttle. Shelly reports about once a second, so publish those more slowly.
   if((_pendingPower || _pendingVoltage) &&
      (0 == _lastApply || (long)(millis() - _lastApply) >= (long)SHELLY_LNM_APPLY_INTERVAL))
   {
@@ -202,8 +208,9 @@ void ShellyLnmTask::notifyConfigChanged()
 }
 
 // Parse one datagram (see shelly_lnm_parser.cpp) and store the latest values.
-// The values are pushed to divert / shaper / EVSE by applyPending().
-void ShellyLnmTask::processPacket(const uint8_t *data, size_t len)
+// Returns true when a power reading was stored. Divert is updated by loop();
+// voltage, the shaper and the status event are published by applyPending().
+bool ShellyLnmTask::processPacket(const uint8_t *data, size_t len)
 {
   ShellyLnmReading reading;
   ShellyLnmParseResult res = shelly_lnm_parse(data, len,
@@ -213,13 +220,15 @@ void ShellyLnmTask::processPacket(const uint8_t *data, size_t len)
                                               reading);
   if(ShellyLnmParseResult::Ok != res) {
     DBUGF("Shelly LNM: packet ignored (%d)", (int)res);
-    return;
+    return false;
   }
 
+  bool gotPower = false;
   if(reading.hasPower && !isnan(reading.power)) {
     _power = reading.power;
     _lastUpdate = millis();
     _pendingPower = true;
+    gotPower = true;
   }
 
   if(reading.hasVoltage && !isnan(reading.voltage)) {
@@ -228,6 +237,7 @@ void ShellyLnmTask::processPacket(const uint8_t *data, size_t len)
   }
 
   DBUGF("Shelly LNM: power=%.1fW voltage=%.1fV", _power, _voltage);
+  return gotPower;
 }
 
 void ShellyLnmTask::applyPending()
@@ -246,18 +256,10 @@ void ShellyLnmTask::applyPending()
   _pendingVoltage = false;
 
   if(_pendingPower) {
-    // Update the global grid_ie, as the mqtt_grid_ie feed would do (grid mode only)
-    if(DIVERT_TYPE_GRID == divert_type) {
-      divert.setGridIe((int)_power);
-    }
-
-    // Feed the shaper unless a dedicated live power topic is configured
+    // Feed the shaper unless a dedicated live power topic is configured.
+    // Divert was already given this reading when the packet arrived.
     if(shaper.getState() && (mqtt_live_pwr == "" || mqtt_live_pwr == mqtt_grid_ie)) {
       shaper.setLivePwr((int)_power);
-    }
-
-    if(DIVERT_TYPE_GRID == divert_type) {
-      divert.update_state();
     }
   }
   _pendingPower = false;

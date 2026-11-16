@@ -50,6 +50,8 @@ DivertTask::DivertTask(EvseManager &evse) :
   _mode(DivertMode::Normal),
   _state(EvseState::None),
   _last_update(0),
+  _applied(false),
+  _update_pending(false),
   _charge_rate(0),
   _evseState(this),
   _available_current(0),
@@ -57,7 +59,8 @@ DivertTask::DivertTask(EvseManager &evse) :
   _min_charge_end(0),
   _timer_divert_active(false),
   _solar(0),
-  _grid_ie(0)
+  _grid_ie(0),
+  _last_data(0)
 {
 
 }
@@ -97,7 +100,26 @@ unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
     }
   }
 
+  // A sample arrived during the quiet period. Apply it once the interval has
+  // elapsed, even if no newer reading shows up.
+  uint32_t now = millis();
+  if(_update_pending && isUpdateDue(now)) {
+    update_state();
+  }
+  if(_update_pending) {
+    uint32_t elapsed = millis() - _last_update;
+    uint32_t wait = elapsed >= DIVERT_UPDATE_INTERVAL ? 1 : DIVERT_UPDATE_INTERVAL - elapsed;
+    return wait;
+  }
+
   return MicroTask.Infinate;
+}
+
+bool DivertTask::isUpdateDue(uint32_t now) const
+{
+  // _applied distinguishes "never" from a sample taken when millis() is 0.
+  return !_applied ||
+         (long)(now - _last_update) >= (long)DIVERT_UPDATE_INTERVAL;
 }
 
 // Update divert mode e.g. Normal / Eco
@@ -161,6 +183,23 @@ void DivertTask::setMode(DivertMode mode)
 // Set charge rate depending on divert mode and solar / grid_ie
 void DivertTask::update_state()
 {
+  // Feeds can arrive about once a second. Applying each one floods events,
+  // EmonCMS and the RAPI queue, and the smoothing filter only consumes whole
+  // seconds. Keep the newest solar/grid values (already stored by the caller)
+  // and apply them at most every DIVERT_UPDATE_INTERVAL.
+  uint32_t now = millis();
+  if(!isUpdateDue(now)) {
+    if(!_update_pending) {
+      _update_pending = true;
+      MicroTask.wakeTask(this);
+    }
+    return;
+  }
+
+  _update_pending = false;
+  _applied = true;
+  _last_update = now;
+
   Profile_Start(DivertTask::update_state);
 
   JsonDocument event;
@@ -282,12 +321,11 @@ void DivertTask::update_state()
     event["smoothed_available_current"] = _smoothed_available_current;
     event["pilot"] = _evse->getChargeCurrent();
     event["min_charge_end"] = min_charge_time_remaining;
+    event["divert_data_age"] = getDataAge();
   } // end ecomode
 
   event_send(event);
   emoncms_publish(event);
-
-  _last_update = millis();
 
   Profile_End(DivertTask::update_state, 5);
 } //end divert_update_state
