@@ -41,7 +41,8 @@ Notes:
   (`divert_data_maxinterval`, default 120 s), Eco pauses charging and stays in
   Eco. Charging resumes on the next sample. `0` disables the failsafe. The
   pause does not wait for the minimum charge time — a dead feed is not a
-  passing cloud. `/status` reports it as `divert_stale`.
+  passing cloud. `/status` reports it as `divert_stale`. This setting sits
+  with the feed and is left unchanged by the tuning presets.
 
 ## Advanced settings
 
@@ -53,8 +54,6 @@ Notes:
   (default 0.05).
 - **Minimum charge time** — how long a triggered charge runs at minimum
   (default 600 s), avoiding contactor chatter on passing clouds.
-- **Maximum data interval** — seconds without a new solar or grid sample
-  before Eco pauses (default 120). `0` disables that failsafe.
 
 > **Caution**: the defaults minimise wear on the EVSE contactor and the EV's
 > charging system. Aggressive values cause rapid switching and increased wear.
