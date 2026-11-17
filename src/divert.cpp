@@ -122,8 +122,10 @@ unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
 bool DivertTask::isUpdateDue(uint32_t now) const
 {
   // _applied distinguishes "never" from a sample taken when millis() is 0.
+  // Unsigned subtraction wraps across the 49-day millis() rollover. A signed
+  // cast of that elapsed time becomes negative after about 24.9 days.
   return !_applied ||
-         (long)(now - _last_update) >= (long)DIVERT_UPDATE_INTERVAL;
+         (now - _last_update) >= (uint32_t)DIVERT_UPDATE_INTERVAL;
 }
 
 // Update divert mode e.g. Normal / Eco
