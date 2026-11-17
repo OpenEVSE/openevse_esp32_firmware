@@ -43,7 +43,8 @@ public:
   void applyEvents(long t_sec);
 
   // False after a {"samples": false} event, until {"samples": true}.
-  // The runner skips applyInputs while this is false so a dead feed can be simulated.
+  // applyInputs still updates live_pwr and vrms. Solar, grid, and
+  // divert update_state wait until samples resume.
   bool acceptsDivertSamples() const { return _divert_samples; }
 
   // Advance the per-peer EV battery model by `dt_seconds` and update the

@@ -199,9 +199,7 @@ int run(const std::string &scenario_path,
     // 1. Apply scheduled events and time-series inputs to each peer.
     for (auto &p : peers) {
       p->applyEvents(t_sec);
-      if (p->acceptsDivertSamples()) {
-        p->applyInputs(t_sec);
-      }
+      p->applyInputs(t_sec);
     }
 
     // 2. Compute load-share allocations and apply them as a max constraint
