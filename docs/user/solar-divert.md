@@ -28,7 +28,7 @@ enable the [MQTT service](integrations.md) and set the topic for either
 - *Solar generation* (always positive) — e.g. `emon/emonpi/power2`.
 
 **HTTP**: POST JSON to the device's `/status` endpoint containing
-`{"solar": <watts>}` or `{"grid_ie": <watts>}`.
+`{"solar": <watts>}` and/or `{"grid_ie": <watts>}`.
 
 Notes:
 
