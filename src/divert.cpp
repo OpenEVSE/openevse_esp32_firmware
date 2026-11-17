@@ -186,16 +186,24 @@ void DivertTask::setMode(DivertMode mode)
 
 void DivertTask::setGridIe(int value)
 {
+  setGridIe(value, _evse->getVoltage());
+}
+
+void DivertTask::setGridIe(int value, double voltage)
+{
   _grid_ie = value;
   _last_data = millis();
   // The meter reading includes whatever the EV is drawing right now. Keep that
-  // current and voltage with the reading so a deferred apply does not pair it
-  // with a later EV load.
+  // current with the reading so a deferred apply does not pair it with a later
+  // EV load. voltage, when in range, is the voltage measured with these watts.
   _grid_amps = _evse->getAmps();
-  _grid_voltage = _evse->getVoltage();
-  if(config_threephase_enabled()) {
-    _grid_voltage *= 3;
+  if(!(voltage >= VOLTAGE_MINIMUM && voltage <= VOLTAGE_MAXIMUM)) {
+    voltage = _evse->getVoltage();
   }
+  if(config_threephase_enabled()) {
+    voltage *= 3;
+  }
+  _grid_voltage = voltage;
   _grid_ev_valid = true;
 }
 

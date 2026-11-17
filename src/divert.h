@@ -127,6 +127,9 @@ class DivertTask : public MicroTasks::Task
       _last_data = millis();
     }
     void setGridIe(int value);
+    // voltage is the line voltage measured with this reading. A value outside
+    // VOLTAGE_MINIMUM..VOLTAGE_MAXIMUM leaves the EVSE voltage in use.
+    void setGridIe(int value, double voltage);
     int getSolar() const { return _solar; }
     int getGridIe() const { return _grid_ie; }
 

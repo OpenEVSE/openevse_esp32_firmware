@@ -95,7 +95,7 @@ unsigned long ShellyLnmTask::loop(MicroTasks::WakeReason reason)
   }
 
   if(newPower && DIVERT_TYPE_GRID == divert_type) {
-    divert.setGridIe((int)_power);
+    divert.setGridIe((int)_power, _voltage);
     divert.update_state();
   }
 
