@@ -102,8 +102,11 @@ unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
   // a dead feed. 10 s is the same order as a normal solar sample.
   if(_mode == DivertMode::Eco && divert_data_maxinterval > 0)
   {
+    // Unsigned subtraction wraps across the 49-day millis() rollover. A signed
+    // cast of that elapsed time becomes negative after about 24.9 days.
     uint32_t limit_ms = divert_data_maxinterval * 1000UL;
-    if(!_stale && (long)(millis() - _last_update) >= (long)limit_ms)
+    uint32_t now = millis();
+    if(!_stale && (now - _last_update) >= limit_ms)
     {
       // The last charge decision would otherwise run forever and import from
       // the grid. Pause immediately — do not wait out divert_min_charge_time.
