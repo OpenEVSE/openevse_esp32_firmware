@@ -430,7 +430,11 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
     int solar = payload_str.toInt();
     divert.setSolar(solar);
     DBUGF("solar:%dW", solar);
-    divert.update_state();
+    // The other feed stays subscribed across a divert_type change. Its samples
+    // must not clear a stale pause or refresh the failsafe clock.
+    if (divert_type == DIVERT_TYPE_SOLAR) {
+      divert.update_state();
+    }
     if (shaper.getState()) {
       shaper.shapeCurrent();
     }
@@ -439,7 +443,9 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
     int grid_ie = payload_str.toInt();
     divert.setGridIe(grid_ie);
     DBUGF("grid:%dW", grid_ie);
-    divert.update_state();
+    if (divert_type == DIVERT_TYPE_GRID) {
+      divert.update_state();
+    }
     if (mqtt_live_pwr == mqtt_grid_ie) {
       shaper.setLivePwr(divert.getGridIe());
     }

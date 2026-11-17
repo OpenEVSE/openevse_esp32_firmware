@@ -1068,27 +1068,26 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       shaper.setLivePwr(shaper_live_pwr);
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
+    // Store whichever readings arrived. Only the selected feed may call
+    // update_state(): the other one would clear divert_stale and refresh
+    // the failsafe clock after a divert_type change.
     if(!doc["solar"].isNull()) {
       int solar = doc["solar"];
       divert.setSolar(solar);
       DBUGF("solar:%dW", solar);
-      divert.update_state();
-      // recalculate shaper
-      if (shaper.getState()) {
-        shaper.shapeCurrent();
-      }
-      send_event = false; // Divert sends the event so no need to send here
     }
-    else if(!doc["grid_ie"].isNull()) {
+    if(!doc["grid_ie"].isNull()) {
       int grid_ie = doc["grid_ie"];
       divert.setGridIe(grid_ie);
       DBUGF("grid:%dW", grid_ie);
+    }
+    if((DIVERT_TYPE_SOLAR == divert_type && !doc["solar"].isNull()) ||
+       (DIVERT_TYPE_GRID == divert_type && !doc["grid_ie"].isNull())) {
       divert.update_state();
-      // recalculate shaper
-      if (shaper.getState()) {
-        shaper.shapeCurrent();
-      }
       send_event = false; // Divert sends the event so no need to send here
+    }
+    if((!doc["solar"].isNull() || !doc["grid_ie"].isNull()) && shaper.getState()) {
+      shaper.shapeCurrent();
     }
     if(!doc["battery_level"].isNull() && vehiclePushAccepted()) {
       double vehicle_soc = doc["battery_level"];
