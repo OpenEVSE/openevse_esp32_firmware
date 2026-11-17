@@ -73,21 +73,17 @@ class TestScheduleRoutes:
         assert not (r.status_code == 404 and "Not found" in r.text), f"{r.status_code}: {r.text[:200]}"
 
 
+# Each test gets its own emulator + firmware pair (evse_instance), so the
+# event needs no cleanup: a teardown_method would run after the fixture has
+# already stopped the firmware.
 @pytest.mark.timeout(120)
 class TestScheduleEnabled:
-    def teardown_method(self, method):
-        evse = getattr(self, "_evse", None)
-        if evse:
-            requests.delete(url(evse, f"/schedule/{EVENT_ID}"), timeout=REQUEST_TIMEOUT)
-
     def test_enabled_defaults_true_and_is_reported(self, evse_instance):
-        self._evse = evse_instance
         post_event(evse_instance, {"id": EVENT_ID, "state": "active",
                                    "time": "23:00:00", "days": EVERY_DAY})
         assert get_event(evse_instance, EVENT_ID).get("enabled") is True
 
     def test_disabled_event_kept_but_left_out_of_plan(self, evse_instance):
-        self._evse = evse_instance
         event = {"id": EVENT_ID, "state": "active", "time": "23:00:00",
                  "days": EVERY_DAY, "feature": "current", "feature_value": 20}
         post_event(evse_instance, event)
