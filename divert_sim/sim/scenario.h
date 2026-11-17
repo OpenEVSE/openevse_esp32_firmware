@@ -32,6 +32,10 @@ struct PeerEvent
   // (priority 1000), which outranks Boost (200).
   bool set_manual = false;
   std::string manual_state;
+
+  // {"samples": false} stops delivering solar/grid readings until {"samples": true}.
+  bool set_samples = false;
+  bool samples = true;
 };
 
 struct PeerScenario

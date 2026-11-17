@@ -63,6 +63,7 @@ class DivertTask : public MicroTasks::Task
     uint8_t _evse_last_state;
     InputFilter _inputFilter;
     bool _timer_divert_active;  // true while a scheduler timer window controls divert
+    bool _stale;                // true once the solar/grid feed has exceeded divert_data_maxinterval
     int _solar;
     int _grid_ie;
 
@@ -116,6 +117,11 @@ class DivertTask : public MicroTasks::Task
 
     uint32_t getLastUpdate() {
       return _last_update;
+    }
+
+    // True when Eco has paused because solar/grid data stopped arriving.
+    bool isStale() const {
+      return _stale;
     }
 
     int getChargeRate() {

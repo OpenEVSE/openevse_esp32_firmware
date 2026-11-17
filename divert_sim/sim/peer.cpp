@@ -108,6 +108,7 @@ void Peer::applyEvents(long t_sec)
         _manual.claim(props);
       }
     }
+    if (e.set_samples) _divert_samples = e.samples;
     _next_event_idx++;
   }
 }

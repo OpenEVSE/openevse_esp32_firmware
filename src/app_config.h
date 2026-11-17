@@ -107,6 +107,7 @@ extern double divert_PV_ratio;
 extern uint32_t divert_attack_smoothing_time;
 extern uint32_t divert_decay_smoothing_time;
 extern uint32_t divert_min_charge_time;
+extern uint32_t divert_data_maxinterval; // seconds without a solar/grid sample before Eco pauses; 0 disables
 
 // Shelly LNM settings (local grid power / voltage source)
 extern bool shelly_lnm_enabled;

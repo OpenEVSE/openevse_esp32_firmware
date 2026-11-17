@@ -64,6 +64,7 @@ x-examples:
     divert_attack_smoothing_time: 20
     divert_decay_smoothing_time: 200
     divert_min_charge_time: 600
+    divert_data_maxinterval: 120
     current_shaper_max_pwr: 9000
     current_shaper_min_pause_time: 300
     current_shaper_data_maxinterval: 120
@@ -296,6 +297,8 @@ properties:
   divert_decay_smoothing_time:
     type: number
   divert_min_charge_time:
+    type: number
+  divert_data_maxinterval:
     type: number
   current_shaper_max_pwr:
     type: number
