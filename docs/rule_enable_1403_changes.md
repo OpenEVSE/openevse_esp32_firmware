@@ -10,8 +10,8 @@ The work spans three repos:
 
 | Repo | Branch | State |
 |---|---|---|
-| `openevse_esp32_firmware` | `feat/schedule-rule-enable` (from `master`) | PR |
-| `gui-nightshift` | `feat/rule-enable-1403` (from `main`) | PR |
+| `openevse_esp32_firmware` | `feat/schedule-rule-enable` (from `master`) | PR [#1412](https://github.com/OpenEVSE/openevse_esp32_firmware/pull/1412) |
+| `gui-nightshift` | `feat/rule-enable-1403` (from `main`) | PR [OpenEVSE/openevse-gui-nightshift#205](https://github.com/OpenEVSE/openevse-gui-nightshift/pull/205) |
 | `open_evse` (controller) | `dev` | local, uncommitted, part of D9.4.2 |
 
 ## 1. Rule on/off switch
