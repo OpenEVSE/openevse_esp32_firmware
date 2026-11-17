@@ -9,7 +9,8 @@
 
 namespace aria {
   namespace csv {
-    enum class Term : char { CRLF = -2 };
+    // signed char: plain char is unsigned on ARM, so CRLF = -2 does not fit.
+    enum class Term : signed char { CRLF = -2 };
     enum class FieldType { DATA, ROW_END, CSV_END };
     using CSV = std::vector<std::vector<std::string>>;
 
