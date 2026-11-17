@@ -65,6 +65,8 @@ class DivertTask : public MicroTasks::Task
     InputFilter _inputFilter;
     bool _timer_divert_active;  // true while a scheduler timer window controls divert
     bool _stale;                // true once the solar/grid feed has exceeded divert_data_maxinterval
+    bool _stale_was_active;     // the failsafe replaced an Active charge claim
+    int _stale_charge_rate;     // charge rate to restore if the failsafe is turned off
     int _solar;
     int _grid_ie;
 

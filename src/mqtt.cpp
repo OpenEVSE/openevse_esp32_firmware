@@ -426,7 +426,11 @@ void Mqtt::handleMqttMessage(MongooseString topic, MongooseString payload) {
   }
 
   // Logic from old mqttmsg_callback
-  if (topic_string == mqtt_solar){
+  // The same non-empty topic on both feeds hits this branch first. In grid
+  // mode that message is the selected feed, so the grid branch has to see it.
+  if (topic_string == mqtt_solar &&
+      !(mqtt_solar.length() > 0 && mqtt_solar == mqtt_grid_ie &&
+        divert_type == DIVERT_TYPE_GRID)) {
     int solar = payload_str.toInt();
     divert.setSolar(solar);
     DBUGF("solar:%dW", solar);

@@ -58,6 +58,8 @@ DivertTask::DivertTask(EvseManager &evse) :
   _min_charge_end(0),
   _timer_divert_active(false),
   _stale(false),
+  _stale_was_active(false),
+  _stale_charge_rate(0),
   _solar(0),
   _grid_ie(0)
 {
@@ -101,11 +103,44 @@ unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
 
   // While Eco is on and the failsafe is enabled, wake often enough to notice
   // a dead feed. 10 s is the same order as a normal solar sample.
+  // 0 disables it, including a pause that is already in effect.
+  if(_mode == DivertMode::Eco && divert_data_maxinterval == 0)
+  {
+    if(_stale)
+    {
+      DBUGLN("Divert failsafe disabled, clearing stale pause");
+      _stale = false;
+      if(_stale_was_active)
+      {
+        _charge_rate = _stale_charge_rate;
+        _state = EvseState::Active;
+        EvseProperties props(EvseState::Active);
+        props.setChargeCurrent(_charge_rate);
+        _evse->claim(EvseClient_OpenEVSE_Divert,
+          _timer_divert_active ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Divert,
+          props);
+      }
+      _stale_was_active = false;
+
+      JsonDocument event;
+      event["divert_stale"] = false;
+      event["divert_active"] = isActive();
+      event["charge_rate"] = _charge_rate;
+      event_send(event);
+    }
+    return MicroTask.Infinate;
+  }
   if(_mode == DivertMode::Eco && divert_data_maxinterval > 0)
   {
     // Unsigned subtraction wraps across the 49-day millis() rollover. A signed
     // cast of that elapsed time becomes negative after about 24.9 days.
-    uint32_t limit_ms = divert_data_maxinterval * 1000UL;
+    // Seconds above ~49.7 days do not fit in a uint32 millisecond count.
+    uint32_t limit_sec = divert_data_maxinterval;
+    const uint32_t max_sec = 4294967295u / 1000u;
+    if(limit_sec > max_sec) {
+      limit_sec = max_sec;
+    }
+    uint32_t limit_ms = limit_sec * 1000u;
     uint32_t now = millis();
     if(!_stale && (now - _failsafe_since) >= limit_ms)
     {
@@ -115,12 +150,14 @@ unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
       // value for divert_decay_smoothing_time and charging starts again.
       DBUGLN("Divert feed stale, pausing charge");
       _stale = true;
+      _stale_was_active = _evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active;
+      _stale_charge_rate = _charge_rate;
       _available_current = 0;
       _smoothed_available_current = 0;
       _charge_rate = 0;
       _state = EvseState::Disabled;
 
-      if(_evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active)
+      if(_stale_was_active)
       {
         // Same priority as a normal low-surplus stop. Disabled at Divert (50)
         // would outrank a priority-10 claim that the normal stop allows.
@@ -175,12 +212,14 @@ void DivertTask::setMode(DivertMode mode)
     {
       case DivertMode::Normal:
         _stale = false;
+        _stale_was_active = false;
         _evse->release(EvseClient_OpenEVSE_Divert);
         break;
 
       case DivertMode::Eco:
       {
         _stale = false;
+        _stale_was_active = false;
         // Arm the failsafe here so a feed that is already quiet does not look
         // stale for the whole uptime the moment Eco is selected. Leave
         // _last_update alone: divert_update is the age of the last sample.
