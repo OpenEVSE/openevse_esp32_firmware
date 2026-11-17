@@ -38,10 +38,10 @@ Notes:
 - If your grid reading has the wrong sign, physically reverse the CT sensor on
   the cable.
 - If the feed stops for longer than **Maximum data interval**
-  (`divert_data_maxinterval`, default 600 s), Eco pauses charging and stays in
+  (`divert_data_maxinterval`, default 3600 s), Eco pauses charging and stays in
   Eco. Charging resumes on the next sample. `0` disables the failsafe. The
-  default is 10 minutes so a healthy feed that publishes every few minutes, or
-  only when the value changes, does not pause and resume on every message.
+  default is one hour so a feed that publishes only when the value changes can
+  stay quiet through a steady export without opening the contactor.
   The pause does not wait for the minimum charge time — a dead feed is not a
   passing cloud. `/status` reports it as `divert_stale`. This setting sits
   with the feed and is left unchanged by the tuning presets.
