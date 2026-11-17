@@ -435,7 +435,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(divert_attack_smoothing_time, 20, "divert_attack_smoothing_time", "das"),
   new ConfigOptDefinition<uint32_t>(divert_decay_smoothing_time, 600, "divert_decay_smoothing_time", "dds"),
   new ConfigOptDefinition<uint32_t>(divert_min_charge_time, 600, "divert_min_charge_time", "dt"),
-  new ConfigOptDefinition<uint32_t>(divert_data_maxinterval, 120, "divert_data_maxinterval", "ddm"),
+  new ConfigOptDefinition<uint32_t>(divert_data_maxinterval, 600, "divert_data_maxinterval", "ddm"),
 
 // Shelly LNM settings
   new ConfigOptDefinition<bool>(shelly_lnm_enabled, false, "shelly_lnm_enabled", "sle"),
