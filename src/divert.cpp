@@ -60,7 +60,10 @@ DivertTask::DivertTask(EvseManager &evse) :
   _timer_divert_active(false),
   _solar(0),
   _grid_ie(0),
-  _last_data(0)
+  _last_data(0),
+  _grid_ev_valid(false),
+  _grid_amps(0),
+  _grid_voltage(0)
 {
 
 }
@@ -106,6 +109,7 @@ unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
   if(_update_pending && isUpdateDue(now)) {
     update_state();
   }
+
   if(_update_pending) {
     uint32_t elapsed = millis() - _last_update;
     uint32_t wait = elapsed >= DIVERT_UPDATE_INTERVAL ? 1 : DIVERT_UPDATE_INTERVAL - elapsed;
@@ -180,6 +184,21 @@ void DivertTask::setMode(DivertMode mode)
   }
 }
 
+void DivertTask::setGridIe(int value)
+{
+  _grid_ie = value;
+  _last_data = millis();
+  // The meter reading includes whatever the EV is drawing right now. Keep that
+  // current and voltage with the reading so a deferred apply does not pair it
+  // with a later EV load.
+  _grid_amps = _evse->getAmps();
+  _grid_voltage = _evse->getVoltage();
+  if(config_threephase_enabled()) {
+    _grid_voltage *= 3;
+  }
+  _grid_ev_valid = true;
+}
+
 // Set charge rate depending on divert mode and solar / grid_ie
 void DivertTask::update_state()
 {
@@ -228,14 +247,22 @@ void DivertTask::update_state()
       // if grid feed is available and exporting increment the charge rate,
       // if importing drop the charge rate.
       // grid_ie is negative when exporting
-      // If grid feeds is available and exporting (negative)
+      // If grid feeds is available and exporting (negative).
+      // voltage and amps were stored with the reading; use those so a deferred
+      // apply does not pair this grid value with a later EV load.
+      double amps;
+      if(_grid_ev_valid) {
+        voltage = _grid_voltage;
+        amps = _grid_amps;
+      } else {
+        amps = _evse->getAmps();
+      }
 
       DBUGVAR(voltage);
       double Igrid_ie = (double)_grid_ie / voltage;
       DBUGVAR(Igrid_ie);
 
       // Subtract the current charge the EV is using from the Grid IE
-      double amps = _evse->getAmps();
       DBUGVAR(amps);
 
       Igrid_ie -= amps;

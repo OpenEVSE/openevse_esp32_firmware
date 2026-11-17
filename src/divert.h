@@ -75,6 +75,11 @@ class DivertTask : public MicroTasks::Task
     int _solar;
     int _grid_ie;
     uint32_t _last_data; // millis when setSolar/setGridIe last stored a reading
+    // EV load at the moment the grid reading arrived. A deferred apply must
+    // use these rather than the EV load at apply time.
+    bool _grid_ev_valid;
+    double _grid_amps;
+    double _grid_voltage;
 
     bool isUpdateDue(uint32_t now) const;
 
@@ -121,10 +126,7 @@ class DivertTask : public MicroTasks::Task
       _solar = value;
       _last_data = millis();
     }
-    void setGridIe(int value) {
-      _grid_ie = value;
-      _last_data = millis();
-    }
+    void setGridIe(int value);
     int getSolar() const { return _solar; }
     int getGridIe() const { return _grid_ie; }
 
