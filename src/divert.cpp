@@ -50,6 +50,7 @@ DivertTask::DivertTask(EvseManager &evse) :
   _mode(DivertMode::Normal),
   _state(EvseState::None),
   _last_update(0),
+  _failsafe_since(0),
   _charge_rate(0),
   _evseState(this),
   _available_current(0),
@@ -106,7 +107,7 @@ unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
     // cast of that elapsed time becomes negative after about 24.9 days.
     uint32_t limit_ms = divert_data_maxinterval * 1000UL;
     uint32_t now = millis();
-    if(!_stale && (now - _last_update) >= limit_ms)
+    if(!_stale && (now - _failsafe_since) >= limit_ms)
     {
       // The last charge decision would otherwise run forever and import from
       // the grid. Pause immediately — do not wait out divert_min_charge_time.
@@ -121,9 +122,11 @@ unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
 
       if(_evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active)
       {
+        // Same priority as a normal low-surplus stop. Disabled at Divert (50)
+        // would outrank a priority-10 claim that the normal stop allows.
         EvseProperties props(EvseState::Disabled);
         _evse->claim(EvseClient_OpenEVSE_Divert,
-          _timer_divert_active ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Divert,
+          _timer_divert_active ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Default,
           props);
       }
 
@@ -178,9 +181,10 @@ void DivertTask::setMode(DivertMode mode)
       case DivertMode::Eco:
       {
         _stale = false;
-        // Start the failsafe clock here so a feed that is already quiet does
-        // not look stale for the whole uptime the moment Eco is selected.
-        _last_update = millis();
+        // Arm the failsafe here so a feed that is already quiet does not look
+        // stale for the whole uptime the moment Eco is selected. Leave
+        // _last_update alone: divert_update is the age of the last sample.
+        _failsafe_since = millis();
         _min_charge_end = 0;
 
         event["charge_rate"] = _charge_rate = 0;
@@ -343,6 +347,7 @@ void DivertTask::update_state()
   emoncms_publish(event);
 
   _last_update = millis();
+  _failsafe_since = _last_update;
 
   Profile_End(DivertTask::update_state, 5);
 } //end divert_update_state

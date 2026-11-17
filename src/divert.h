@@ -54,7 +54,8 @@ class DivertTask : public MicroTasks::Task
     EvseManager *_evse;
     DivertMode _mode;
     EvseState _state;
-    uint32_t _last_update;
+    uint32_t _last_update;     // millis() of the last applied solar/grid sample
+    uint32_t _failsafe_since;  // millis() when the stale-feed clock started
     int _charge_rate;
     MicroTasks::EventListener _evseState;
     double _available_current;
