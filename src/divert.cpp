@@ -134,13 +134,20 @@ unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
   {
     // Unsigned subtraction wraps across the 49-day millis() rollover. A signed
     // cast of that elapsed time becomes negative after about 24.9 days.
-    // Seconds above ~49.7 days do not fit in a uint32 millisecond count.
-    uint32_t limit_sec = divert_data_maxinterval;
-    const uint32_t max_sec = 4294967295u / 1000u;
-    if(limit_sec > max_sec) {
-      limit_sec = max_sec;
+    // This difference is only sampled every poll. A limit inside that window
+    // of the wrap is skipped, and a silent feed then stays unpaused for
+    // another full cycle. Two polls of headroom still catch a late wake.
+    const uint32_t poll_ms = 10000u;
+    const uint32_t max_ms = 4294967295u - (poll_ms * 2u);
+    uint32_t limit_ms = divert_data_maxinterval;
+    if(limit_ms > max_ms / 1000u)
+    {
+      limit_ms = max_ms;
     }
-    uint32_t limit_ms = limit_sec * 1000u;
+    else
+    {
+      limit_ms *= 1000u;
+    }
     uint32_t now = millis();
     if(!_stale && (now - _failsafe_since) >= limit_ms)
     {
@@ -175,7 +182,7 @@ unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
       event["smoothed_available_current"] = 0;
       event_send(event);
     }
-    return 10000UL;
+    return poll_ms;
   }
 
   return MicroTask.Infinate;
