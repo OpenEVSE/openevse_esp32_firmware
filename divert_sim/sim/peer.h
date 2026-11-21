@@ -42,6 +42,11 @@ public:
   // Apply any events scheduled at `t_sec` (online / vehicle changes).
   void applyEvents(long t_sec);
 
+  // False after a {"samples": false} event, until {"samples": true}.
+  // applyInputs still updates live_pwr and vrms. Solar, grid, and
+  // divert update_state wait until samples resume.
+  bool acceptsDivertSamples() const { return _divert_samples; }
+
   // Advance the per-peer EV battery model by `dt_seconds` and update the
   // SimEvse state (charging vs connected) based on the current pilot.
   void updateBattery(double dt_seconds);
@@ -88,6 +93,7 @@ private:
 
   // Track which event-indices have already fired.
   size_t _next_event_idx = 0;
+  bool _divert_samples = true;
 };
 
 } // namespace sim

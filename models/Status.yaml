@@ -169,6 +169,9 @@ properties:
   divert_update:
     type: number
     description: The time since the last update of the divert feed
+  divert_stale:
+    type: boolean
+    description: '`true` when Eco has paused because solar/grid data stopped arriving'
   shelly_lnm_listening:
     type: integer
     description: '`1` if the Shelly LNM listener is running, `0` if not'
