@@ -7,6 +7,7 @@
 #include "certificates.h"
 
 #include <string>
+#include <atomic>
 
 typedef const __FlashStringHelper *fstr_t;
 
@@ -2659,7 +2660,21 @@ static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
 
   SerialDebug.onWrite([](const uint8_t *buffer, size_t size)
   {
+    // Not re-entrant: if the WebSocket send cannot grow its buffer, Mongoose
+    // logs the failure to this same debug port, which lands back here and
+    // tries to send again -- recursing until loopTask's stack overflows (seen
+    // during a low-heap online update with the console open). Output written
+    // while a send is in progress still goes to the serial port; it is just
+    // not forwarded to the console.
+    // Atomic exchange: debug output can also be written from other tasks (SD
+    // card, TSDB logger), so test-and-set must be one step for only one
+    // caller to own the send.
+    static std::atomic<bool> sending{false};
+    if(sending.exchange(true)) {
+      return;
+    }
     web_server_send_all("/debug/console", buffer, size);
+    sending.store(false);
   });
 
   server.on("/evse", [](MongooseHttpServerRequest *request) {

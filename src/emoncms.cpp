@@ -13,6 +13,7 @@
 #include "app_config.h"
 #include "input.h"
 #include "event.h"
+#include "http_update.h"
 
 boolean emoncms_connected = false;
 boolean emoncms_updated = false;
@@ -47,6 +48,14 @@ static void emoncms_result(bool success, String message)
 void emoncms_publish(JsonDocument &data)
 {
   Profile_Start(emoncms_publish);
+
+  // Skip posts while an online firmware update needs the heap (http_update.cpp);
+  // a missed sample is harmless and the next publish carries current values.
+  if (http_update_in_progress())
+  {
+    Profile_End(emoncms_publish, 10);
+    return;
+  }
 
   if (config_emoncms_enabled() && emoncms_apikey != 0)
   {
