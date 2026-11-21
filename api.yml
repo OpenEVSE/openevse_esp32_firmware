@@ -3268,6 +3268,14 @@ components:
           uniqueItems: true
           items:
             $ref: '#/components/schemas/Day'
+        enabled:
+          type: boolean
+          default: true
+          description: >-
+            A disabled event is kept and saved but left out of the weekly
+            plan, so the event before it stays in force. Omitted on write
+            means enabled. Always present on read (firmware that predates
+            the flag never reports it).
       required:
         - state
         - time

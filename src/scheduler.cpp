@@ -60,7 +60,8 @@ Scheduler::Event::Event(uint32_t id, uint8_t hour, uint8_t minute, uint8_t secon
 Scheduler::Event::Event(uint32_t id, uint32_t second, uint8_t days, EvseState state) :
   _id(id), _seconds(second), _days(days), _state(state), _next(0),
   _feature(SchedulerFeature::None), _feature_value(0),
-  _limit_type(SchedulerLimitType::None), _limit_value(0)
+  _limit_type(SchedulerLimitType::None), _limit_value(0),
+  _enabled(true)
 {
   if(id >= _next_id) {
     _next_id = id + 1;
@@ -263,14 +264,18 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
         currentEvent.getState().toString());
       EvseProperties properties(currentEvent.getState());
       int priority = EvseManager_Priority_Default;
+      bool aboveDefault = false;
       if(EvseState::Active == currentEvent.getState())
       {
         priority = EvseManager_Priority_Timer;
         Event *e = currentEvent.getEvent();
 
-        // Charge current: use feature_value if current feature selected, else hardware max
+        // Charge current: the rule's own current if it sets one (an explicit
+        // choice, allowed above the default current); otherwise hardware max,
+        // which the EVSE manager caps at the default current.
         if(e->getFeature() == SchedulerFeature::Current && e->getFeatureValue() > 0) {
           properties.setChargeCurrent(e->getFeatureValue());
+          aboveDefault = true;
         } else {
           properties.setChargeCurrent(_evse->getMaxHardwareCurrent());
         }
@@ -285,7 +290,7 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
           _activeLimitType = e->getLimitType();
         }
       }
-      _evse->claim(EvseClient_OpenEVSE_Schedule, priority, properties);
+      _evse->claim(EvseClient_OpenEVSE_Schedule, priority, properties, aboveDefault);
     } else {
       // No scheduled events, release any claims
       DBUGLN("releasing claims");
@@ -367,7 +372,7 @@ void Scheduler::buildSchedule()
   for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
   {
     Event *event = &_events[i];
-    if(event->isValid())
+    if(event->isValid() && event->isEnabled())
     {
       uint8_t days = event->getDays();
       for(int day = 0; day < SCHEDULER_DAYS_IN_A_WEEK; day++)
@@ -552,6 +557,7 @@ Scheduler::Event *Scheduler::addEventInternal(uint32_t event_id, const char *tim
     event->setFeatureValue(0);
     event->setLimitType(SchedulerLimitType::None);
     event->setLimitValue(0);
+    event->setEnabled(true);
     if(active_event_updated) {
       _active_event_dirty = true;
     }
@@ -591,6 +597,7 @@ bool Scheduler::addEvent(uint32_t event_id, int hour, int minute, int second, ui
     event->setState(state);
 
     event->setDays(days);
+    event->setEnabled(true);
 
     if(active_event_updated) {
       _active_event_dirty = true;
@@ -789,6 +796,9 @@ bool Scheduler::deserializeInternal(JsonObject &obj, uint32_t event_id)
       if(!obj["limit_value"].isNull()) {
         event->setLimitValue((uint32_t)obj["limit_value"]);
       }
+      // Absent means enabled, so clients that predate the flag (and saved
+      // schedules) keep every event active.
+      event->setEnabled(obj["enabled"].isNull() || obj["enabled"].as<bool>());
       return true;
     }
   }
@@ -897,6 +907,9 @@ bool Scheduler::serialize(JsonObject &object, Scheduler::Event *event)
     object["limit"] = event->getLimitName();
     object["limit_value"] = event->getLimitValue();
   }
+
+  // Always present, so a client can tell this firmware supports it.
+  object["enabled"] = event->isEnabled();
 
   return true;
 }

@@ -166,6 +166,7 @@ class Scheduler : public MicroTasks::Task
         uint32_t _feature_value;
         SchedulerLimitType _limit_type;
         uint32_t _limit_value;
+        bool _enabled;
 
         EventInstance _nextEvents[SCHEDULER_DAYS_IN_A_WEEK];
       public:
@@ -241,6 +242,11 @@ class Scheduler : public MicroTasks::Task
 
         uint32_t getLimitValue() { return _limit_value; }
         void setLimitValue(uint32_t v) { _limit_value = v; }
+
+        // A disabled event is kept (and saved) but left out of the weekly
+        // plan, so the event before it stays in force (#1403).
+        bool isEnabled() { return _enabled; }
+        void setEnabled(bool enabled) { _enabled = enabled; }
 
         bool isValid() {
           return SCHEDULER_EVENT_NULL != _id;
