@@ -53,6 +53,6 @@ TEST_CASE("bl_show_setup_screen: a fault gets the fault screen") {
   CHECK_FALSE(bl_show_setup_screen(true, true, true, true));
 }
 
-TEST_CASE("bl_show_setup_screen: tft_setup_qr off suppresses it entirely") {
+TEST_CASE("bl_show_setup_screen: wifi_setup_prompt off suppresses it entirely") {
   CHECK_FALSE(bl_show_setup_screen(true, false, false, false));
 }

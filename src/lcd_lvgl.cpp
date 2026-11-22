@@ -362,7 +362,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
       // using the charger); otherwise the charge screen (default), and switch
       // later if AP mode is reported.
       uint8_t bootState = _evse->getEvseState();
-      if(bl_show_setup_screen(_wifiModeKnown && !_wifi_client, tft_setup_qr,
+      if(bl_show_setup_screen(_wifiModeKnown && !_wifi_client, wifi_setup_prompt,
                               _evse->isVehicleConnected(), state_is_fault(bootState))) {
         buildSetupScreen();
         _activeScreen = SCR_SETUP;
@@ -383,7 +383,7 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
   // no WiFi at the site stays in AP mode for good, so the QR only holds the
   // screen while the charger is idle: a connected vehicle or a fault (including
   // the fault page's dwell) gets its own screen (openevse-gui-nightshift#213).
-  bool wantSetup = bl_show_setup_screen(_wifiModeKnown && !_wifi_client, tft_setup_qr,
+  bool wantSetup = bl_show_setup_screen(_wifiModeKnown && !_wifi_client, wifi_setup_prompt,
                                         _evse->isVehicleConnected(),
                                         state_is_fault(_evse->getEvseState()) ||
                                           _activeScreen == SCR_FAULT);

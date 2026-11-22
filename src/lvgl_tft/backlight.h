@@ -20,7 +20,7 @@ bool bl_leds_dark(bool standby, bool leds_off_in_standby);
 
 // Whether the full-screen WiFi setup QR should own the display.
 //   ap_mode    : the gateway is known to be in softAP mode (not a WiFi client)
-//   qr_enabled : tft_setup_qr (the owner can turn the QR off for good)
+//   qr_enabled : wifi_setup_prompt (the owner can turn the QR off for good)
 //   vehicle    : a vehicle is connected
 //   fault      : the EVSE is faulted, or the fault page is still being held
 // A station with no WiFi at the site stays in AP mode indefinitely, so the QR

@@ -4,6 +4,8 @@
 
 #include <Arduino.h>
 #include <openevse.h>
+#include "led_policy.h"
+#include "app_config.h"   // wifi_setup_prompt
 
 #ifdef ESP32
 //#include <analogWrite.h>
@@ -741,12 +743,16 @@ int LedManagerTask::getPriority(LedState priorityState)
       return 10;
 
     case LedState_Evse_State:
-      return _evse->isError() ? 1000 : 50;
+      return _evse->isError() ? 1000 : LED_EVSE_PRIORITY;
 
+    // A WiFi pattern only beats the EVSE pattern while nobody is using the
+    // charger: a station with no WiFi at the site stays in AP mode for good
+    // (openevse-gui-nightshift#213), and the blink hid the charging pattern.
     case LedState_WiFi_Access_Point_Waiting:
     case LedState_WiFi_Access_Point_Connected:
+      return led_wifi_priority(true, _evse->isVehicleConnected(), wifi_setup_prompt);
     case LedState_WiFi_Client_Connecting:
-      return 100;
+      return led_wifi_priority(false, _evse->isVehicleConnected(), wifi_setup_prompt);
 
     case LedState_Test_Red:
     case LedState_Test_Green:
@@ -876,6 +882,11 @@ void LedManagerTask::setBrightness(uint8_t brightness)
 
   // Wake the task to refresh the state
   MicroTask.wakeTask(this);
+}
+
+void LedManagerTask::refresh()
+{
+  setNewState();
 }
 
 void LedManagerTask::setStandbyDark(bool dark)

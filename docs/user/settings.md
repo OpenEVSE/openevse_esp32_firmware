@@ -10,7 +10,14 @@ hardware is present.
 
 - **[Network](screenshots/settings-network-dark-desktop.png)** — WiFi
   scan/join, access-point fallback, hostname, wired Ethernet on supported
-  boards. See [Getting started](getting-started.md).
+  boards. See [Getting started](getting-started.md). While the charger has no
+  WiFi network and is running its own setup hotspot, an idle charger prompts
+  for setup: the TFT shows a QR code for joining the hotspot and the status
+  LEDs blink. Plugging in a vehicle, or a fault, brings back the normal
+  charging or fault screen and LED colours, and the prompt returns when the
+  vehicle is unplugged. For a charger that will never have WiFi, the **Setup
+  prompt** switch in the access-point section (`wifi_setup_prompt`, on by
+  default) turns both off; the hotspot itself stays available.
 - **[HTTP](screenshots/settings-http-dark-desktop.png)** — web access:
   admin username/password (strongly recommended — HTTP auth then protects
   every request including the input APIs), TLS certificate selection, UI
@@ -76,13 +83,7 @@ hardware is present.
   brightness, and sleep timeout for the on-device TFT touchscreen (only shown
   on TFT-equipped hardware). The status LEDs can also go dark while the
   screen is asleep (`tft_standby_leds_off`, off by default); anything that
-  wakes the screen lights them again. While the charger has no WiFi network
-  (it is running its own setup hotspot), the screen shows a QR code for
-  joining that hotspot, but only while the charger is idle: plugging in a
-  vehicle, or a fault, brings up the charging or fault screen, and the QR
-  returns when the vehicle is unplugged. For a charger that will never have
-  WiFi, `tft_setup_qr` (on by default) turns the QR screen off entirely; the
-  hotspot itself stays available. On chargers with the 2-line character LCD
+  wakes the screen lights them again. On chargers with the 2-line character LCD
   instead: the backlight type (RGB, or monochrome for a JuiceBox v2
   conversion) and the same idle timeout, which switches the LCD backlight
   off; it stays lit while charging or in a fault, and any state change or
