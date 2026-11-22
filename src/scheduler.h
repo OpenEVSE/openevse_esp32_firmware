@@ -14,6 +14,8 @@ enum class SchedulerFeature : uint8_t {
   OCPP,     // OCPP-managed charging (placeholder)
   RFID,     // Require RFID authentication
   Current,  // Set charge current (feature_value = amps)
+  Reboot,   // Point-in-time trigger: reboot EVSE + WiFi unless charging.
+            // Not part of the window plan (see buildSchedule).
 };
 
 // Session limit applied while the timer window is active.
@@ -278,7 +280,14 @@ class Scheduler : public MicroTasks::Task
     SchedulerFeature _activeFeature;
     SchedulerLimitType _activeLimitType;
 
+    // Next scheduled reboot (epoch seconds, 0 = none) and the event it came
+    // from, for logging.
+    time_t _nextRebootAt;
+    uint32_t _nextRebootId;
+
     void buildSchedule();
+    void computeNextReboot(time_t now);
+    void handleReboot(time_t now);
     bool commit();
     EventInstance &getCurrentEvent();
     bool findEvent(uint32_t id, Event **event);

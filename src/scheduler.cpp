@@ -186,7 +186,9 @@ Scheduler::Scheduler(EvseManager &evse) :
   _version(0),
   _plan_version(0),
   _activeFeature(SchedulerFeature::None),
-  _activeLimitType(SchedulerLimitType::None)
+  _activeLimitType(SchedulerLimitType::None),
+  _nextRebootAt(0),
+  _nextRebootId(SCHEDULER_EVENT_NULL)
 {
 
 }
@@ -316,6 +318,19 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
     delay = _activeEvent.getNext().getDelay(currentDay, currentOffset) * 1000;
     DBUGVAR(delay);
   }
+
+  // Scheduled reboots run alongside the window plan: fire one that is due,
+  // then re-derive the next from the clock (also picks up time changes).
+  time_t now = time(NULL);
+  handleReboot(now);
+  computeNextReboot(now);
+  if(_nextRebootAt > now) {
+    uint32_t rebootDelay = (uint32_t)(_nextRebootAt - now) * 1000;
+    if(rebootDelay < delay) {
+      delay = rebootDelay;
+    }
+  }
+
   return delay;
 }
 
@@ -367,7 +382,10 @@ void Scheduler::buildSchedule()
   for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
   {
     Event *event = &_events[i];
-    if(event->isValid())
+    // Reboot events are point-in-time triggers, not window boundaries: in
+    // the plan they would become the current event and hold its state until
+    // the next event. handleReboot() runs them instead.
+    if(event->isValid() && event->getFeature() != SchedulerFeature::Reboot)
     {
       uint8_t days = event->getDays();
       for(int day = 0; day < SCHEDULER_DAYS_IN_A_WEEK; day++)
@@ -990,7 +1008,7 @@ void Scheduler::getCurrentTime(int &day, int32_t &offset)
 // ── Event feature/limit string converters ────────────────────────────────────
 
 static const char * const feature_names[] = {
-  "none", "divert", "shaper", "ocpp", "rfid", "current"
+  "none", "divert", "shaper", "ocpp", "rfid", "current", "reboot"
 };
 
 bool Scheduler::Event::setFeature(const char *name)
@@ -1037,6 +1055,111 @@ const char *Scheduler::Event::getLimitName()
     return limit_names[idx];
   }
   return limit_names[0];
+}
+
+// ── Scheduled reboot ─────────────────────────────────────────────────────────
+
+// Before this the clock has not been set (SNTP / EVSE RTC not synced yet), so
+// day-of-week and time-of-day mean nothing.
+#define SCHEDULER_REBOOT_MIN_VALID_TIME ((time_t)1609459200)  // 2021-01-01
+// A reboot that is due but was reached this much later (a clock step forward
+// past it) is dropped rather than fired at the wrong time.
+#define SCHEDULER_REBOOT_GRACE_SEC 120
+// No scheduled reboot this soon after boot, so a clock that comes back a
+// little behind the reboot time can't reboot the station twice.
+#define SCHEDULER_REBOOT_MIN_UPTIME_MS (2UL * 60UL * 1000UL)
+
+void Scheduler::computeNextReboot(time_t now)
+{
+  _nextRebootAt = 0;
+  _nextRebootId = SCHEDULER_EVENT_NULL;
+
+  if(now < SCHEDULER_REBOOT_MIN_VALID_TIME) {
+    return;
+  }
+
+  tm today;
+  localtime_r(&now, &today);
+
+  for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
+  {
+    Event *event = &_events[i];
+    if(!event->isValid() || event->getFeature() != SchedulerFeature::Reboot) {
+      continue;
+    }
+
+    // Days 0..7: today through the same weekday next week, so a weekly
+    // reboot whose time has already passed today still finds next week's.
+    // mktime() on local wall-clock fields keeps the time right across DST.
+    for(int d = 0; d <= SCHEDULER_DAYS_IN_A_WEEK; d++)
+    {
+      int weekday = (today.tm_wday + d) % SCHEDULER_DAYS_IN_A_WEEK;
+      if(!(event->getDays() & (1 << weekday))) {
+        continue;
+      }
+
+      tm candidate = today;
+      candidate.tm_mday += d;
+      candidate.tm_hour = event->getHours();
+      candidate.tm_min = event->getMinutes();
+      candidate.tm_sec = event->getSeconds();
+      candidate.tm_isdst = -1;
+      time_t at = mktime(&candidate);
+
+      // Strictly in the future: a reboot due "now" was handled (or skipped)
+      // by handleReboot() just before this.
+      if(at > now) {
+        if(0 == _nextRebootAt || at < _nextRebootAt) {
+          _nextRebootAt = at;
+          _nextRebootId = event->getId();
+        }
+        break; // later days of this event can only be later
+      }
+    }
+  }
+
+  DBUGF("Scheduler: next reboot %ld (event %u)", (long)_nextRebootAt, _nextRebootId);
+}
+
+void Scheduler::handleReboot(time_t now)
+{
+  if(0 == _nextRebootAt || now < _nextRebootAt) {
+    return;
+  }
+
+  uint32_t id = _nextRebootId;
+  bool late = (now - _nextRebootAt) > SCHEDULER_REBOOT_GRACE_SEC;
+  _nextRebootAt = 0;
+  _nextRebootId = SCHEDULER_EVENT_NULL;
+
+  JsonDocument evt;
+  evt["schedule_reboot_id"] = id;
+
+  if(late || uptimeMillis() < SCHEDULER_REBOOT_MIN_UPTIME_MS) {
+    DBUGF("Scheduler: reboot %u missed (late=%d), skipping", id, late);
+    evt["schedule_reboot"] = "missed";
+    event_send(evt);
+    return;
+  }
+
+  // Never interrupt a session in progress. Connected but not charging
+  // (state B, sleeping, finished) is fine to reboot.
+  if(_evse->isCharging()) {
+    DBUGF("Scheduler: reboot %u aborted, vehicle charging", id);
+    evt["schedule_reboot"] = "skipped_charging";
+    event_send(evt);
+    return;
+  }
+
+  DBUGF("Scheduler: scheduled reboot %u", id);
+  evt["schedule_reboot"] = "rebooting";
+  event_send(evt);
+
+  // Same order as OCPP's hard reset: controller first ($FR), then the
+  // gateway, which restart_system() delays by 1 s so the RAPI write and the
+  // event above get out first.
+  _evse->restartEvse();
+  restart_system();
 }
 
 // ── Scheduler feature/limit helpers ──────────────────────────────────────────

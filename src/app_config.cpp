@@ -1256,6 +1256,10 @@ bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, boo
   // module that was flashed with the 4MB partition layout.
   doc["partition_scheme"] = flash_migrate_partition_scheme();
   doc["can_expand_16mb"]  = flash_migrate_can_expand_16mb();
+  // Scheduler understands feature "reboot" (scheduled station reboot). The UI
+  // offers the action only when this is present: firmware without it would
+  // load such a timer as a plain stop event.
+  doc["schedule_reboot"] = true;
 
   // EVSE information are only evailable when config_version is incremented
   if(config_ver > 0) {
