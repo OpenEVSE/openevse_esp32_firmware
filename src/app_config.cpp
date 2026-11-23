@@ -385,7 +385,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
   new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
   new ConfigOptDefinition<bool>(tft_standby_leds_off, false, "tft_standby_leds_off", "tslo"),
-  new ConfigOptDefinition<bool>(wifi_setup_prompt, true, "wifi_setup_prompt", "wsp"),
+  new ConfigOptDefinition<bool>(wifi_setup_prompt, true, "wifi_setup_prompt", "wspr"),
 #endif
 
 // LCD backlight timeout

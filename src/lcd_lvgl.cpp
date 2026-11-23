@@ -441,7 +441,12 @@ unsigned long LcdTask::loop(MicroTasks::WakeReason reason)
     }
   }
   // bl_should_standby returns false when keepAwake, so this is a plain guard.
-  if(bl_should_standby(keepAwake, (uint32_t)_timeoutS, millis() - _lastWake)) {
+  // Never enter standby while the fault page's dwell is still running:
+  // standby would replace SCR_FAULT and cut the dwell short.
+  bool faultDwell = _activeScreen == SCR_FAULT &&
+                    (int32_t)(millis() - _faultHoldUntil) < 0;
+  if(!faultDwell &&
+     bl_should_standby(keepAwake, (uint32_t)_timeoutS, millis() - _lastWake)) {
     if(!_standby) {
       enterStandby();
     }

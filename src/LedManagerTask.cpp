@@ -558,6 +558,7 @@ unsigned long LedManagerTask::loop(MicroTasks::WakeReason reason)
       return TEST_LED_TIME;
 
     case LedState_Off:
+    case LedState_Evse_State:   // EVSE colours own the RGB LEDs; the WiFi LED goes dark
       setWiFiLed(!WIFI_LED_ON_STATE);
       return MicroTask.Infinate;
 
