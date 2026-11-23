@@ -887,6 +887,12 @@ void LedManagerTask::setBrightness(uint8_t brightness)
 
 void LedManagerTask::refresh()
 {
+  // config_load_settings() fires config_changed() for every stored option
+  // before begin() has run; the priorities read _evse, so wait for begin(),
+  // which picks up the current config anyway.
+  if(nullptr == _evse) {
+    return;
+  }
   setNewState();
 }
 
