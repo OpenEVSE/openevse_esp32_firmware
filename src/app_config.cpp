@@ -104,7 +104,7 @@ String tft_theme;
 uint32_t tft_brightness;
 uint32_t tft_standby_brightness;
 bool tft_standby_leds_off;
-bool wifi_setup_prompt;
+bool wifi_setup_prompt = true;  // non-TFT builds have no option; keep the hotspot blink
 
 // LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
 // char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
