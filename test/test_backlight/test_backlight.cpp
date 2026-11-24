@@ -33,3 +33,26 @@ TEST_CASE("bl_leds_dark: LEDs go dark only in standby with the option on") {
   CHECK_FALSE(bl_leds_dark(false, true));   // awake: LEDs follow the EVSE state
   CHECK_FALSE(bl_leds_dark(false, false));
 }
+
+// openevse-gui-nightshift#213: a station with no WiFi sits in AP mode for good,
+// so the setup QR must not hold the screen once someone is actually using it.
+TEST_CASE("bl_show_setup_screen: QR only in AP mode, unplugged, no fault, option on") {
+  CHECK(bl_show_setup_screen(true, true, false, false));
+}
+
+TEST_CASE("bl_show_setup_screen: never outside AP mode") {
+  CHECK_FALSE(bl_show_setup_screen(false, true, false, false));
+}
+
+TEST_CASE("bl_show_setup_screen: a connected vehicle gets the charge screen") {
+  CHECK_FALSE(bl_show_setup_screen(true, true, true, false));
+}
+
+TEST_CASE("bl_show_setup_screen: a fault gets the fault screen") {
+  CHECK_FALSE(bl_show_setup_screen(true, true, false, true));
+  CHECK_FALSE(bl_show_setup_screen(true, true, true, true));
+}
+
+TEST_CASE("bl_show_setup_screen: wifi_setup_prompt off suppresses it entirely") {
+  CHECK_FALSE(bl_show_setup_screen(true, false, false, false));
+}
