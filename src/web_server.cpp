@@ -2093,7 +2093,9 @@ handleRapi(MongooseHttpServerRequest *request) {
 
   RapiRequest *req = new RapiRequest{request, response, json, request->getParam("rapi")};
 
-  if(evse.isRapiCommandBlocked(req->rapi))
+  // The installer can lift the filter for this console until reboot
+  // (POST /installer/rapi).
+  if(!evse.isRapiConsoleUnlocked() && evse.isRapiCommandBlocked(req->rapi))
   {
     rapiRespond(req, RAPI_RESPONSE_BLOCKED, "");
     return;
@@ -2413,6 +2415,7 @@ static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
   server.on("/installer/verify", handleInstallerVerify);
   server.on("/installer/password", handleInstallerPassword);
   server.on("/installer/maxcurrent", handleInstallerMaxCurrent);
+  server.on("/installer/rapi", handleInstallerRapi);
   server.on("/emeter", handleEmeter);
   server.on("/time", handleTime);
   server.on("/mqtt", handleMqttAction);

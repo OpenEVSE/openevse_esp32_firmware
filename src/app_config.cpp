@@ -1257,6 +1257,11 @@ bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, boo
   doc["partition_scheme"] = flash_migrate_partition_scheme();
   doc["can_expand_16mb"]  = flash_migrate_can_expand_16mb();
 
+  // RAPI console (/r) accepts every command: installer override until reboot,
+  // or an ENABLE_FULL_RAPI build. rapi_console_unlocked is the override alone.
+  doc["rapi_console_unrestricted"] = evse.isRapiConsoleUnrestricted();
+  doc["rapi_console_unlocked"] = evse.isRapiConsoleUnlocked();
+
   // EVSE information are only evailable when config_version is incremented
   if(config_ver > 0) {
     // Read only information

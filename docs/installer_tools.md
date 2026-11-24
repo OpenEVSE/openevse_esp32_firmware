@@ -12,6 +12,7 @@ NEC 625.42 (2023) lets an EVSE with adjustable current be sized to its *set* cur
 |---|---|
 | Hardware maximum current | Sends `$SC xx M` through OpenEVSE_Lib (`setCurrentCapacityFactoryLimit`). One-time only. |
 | Safety checks | Moved here from Settings → Safety. The GFCI self-test toggle carries the note "Disable if the circuit is protected by a GFCI." |
+| RAPI console access | Lifts the RAPI command filter on the Developer Tools console until the next reboot. |
 | Installer password | Change the password that unlocks the page. |
 
 ### Hardware maximum current
@@ -19,6 +20,12 @@ NEC 625.42 (2023) lets an EVSE with adjustable current be sized to its *set* cur
 The controller accepts `$SC xx M` only while its EEPROM byte (`EOFS_MAX_HW_CURRENT_CAPACITY`) has never been written; any later attempt returns `$NK`, and nothing in RAPI can erase it. The page says so, and tells the installer to set the lower of the station maximum and the circuit maximum. The circuit maximum is the branch-circuit breaker rating × 80%, because an EV charging load is a continuous load (NEC 210.19(A)(1), 210.20(A), 625.42).
 
 The charger can only report that the command was *sent*. The page waits two seconds, re-reads `/config`, and compares `max_current_hard` with the request, so a refused write (already set once) is reported as unchanged rather than as success. The range accepted runs from 6 A (or the controller's minimum, if higher) up to the hardware maximum the controller reports now, never above 80 A. The controller's setter clamps rather than refusing, and the write is once only, so a request outside that range would spend it on a value nobody asked for; the charger answers 400 instead. In practice the limit can only come down.
+
+### RAPI console access
+
+Normally the HTTP RAPI console (`/r`, used by Developer Tools) only passes `$G…`, `$F0` and `$FB` (`EvseManager::isRapiCommandBlocked()`); anything else gets `RAPI_RESPONSE_BLOCKED`. The installer can lift that filter for the console with `POST /installer/rapi {"password","unlocked":true}`. The flag is a RAM-only member of `EvseManager`, never written to config, so the next reboot of the gateway always restores the filter; the page also has a button to restore it straight away. RAPI over MQTT keeps its filter regardless.
+
+`/config` reports `rapi_console_unlocked` (the override) and `rapi_console_unrestricted` (the override, or a build with `ENABLE_FULL_RAPI`, where the filter never applies). Developer Tools shows a warning banner while the console is unrestricted.
 
 ### GFCI self-test advisory removed
 
@@ -41,8 +48,9 @@ All are `POST`, JSON body, require the normal login and the `X-Requested-With: O
 | `/installer/verify` | `{"password"}` | 200 `ok`, 403 `wrong password`, 429 `locked` |
 | `/installer/password` | `{"current","new"}` | 200 `changed`, 400 `invalid password`, 403, 429 |
 | `/installer/maxcurrent` | `{"password","amps"}` | 200 `sent` (+`requested`, `previous`), 400 `amps out of range` (+`min`, `max`), 403, 429 |
+| `/installer/rapi` | `{"password","unlocked"}` | 200 `ok` (+`unlocked`, `unrestricted`), 400, 403, 429 |
 
-Five wrong passwords lock all three endpoints for 30 seconds (`429` with `retry_after` seconds). The counter is shared and held in RAM, so a reboot clears it.
+Five wrong passwords lock all four endpoints for 30 seconds (`429` with `retry_after` seconds). The counter is shared and held in RAM, so a reboot clears it.
 
 ## Limits to be aware of
 

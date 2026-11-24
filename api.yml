@@ -2653,6 +2653,77 @@ paths:
                 $ref: '#/components/schemas/Message'
         '429':
           $ref: '#/components/responses/InstallerLocked'
+  /installer/rapi:
+    post:
+      operationId: installerSetRapiConsoleUnlocked
+      summary: Lift or restore the RAPI console command filter until reboot
+      description: |
+        With `unlocked: true`, the HTTP RAPI console (`/r`) accepts every
+        command, not only `$G`, `$F0` and `$FB`. The setting is held in RAM and
+        is cleared by the next reboot; `unlocked: false` restores the filter at
+        once. RAPI over MQTT keeps its filter either way. `GET /config` reports
+        the state as `rapi_console_unlocked` (this override) and
+        `rapi_console_unrestricted` (the override, or a build with
+        `ENABLE_FULL_RAPI`). Sends `X-Requested-With: OpenEVSE`.
+      tags:
+        - Installer
+      parameters:
+        - name: X-Requested-With
+          in: header
+          required: true
+          description: Required on every installer call, including Basic-auth clients. Any other value gets `403` with `{"msg":"csrf"}`.
+          schema:
+            type: string
+            enum:
+              - OpenEVSE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+                - unlocked
+              properties:
+                password:
+                  type: string
+                unlocked:
+                  type: boolean
+      responses:
+        '200':
+          description: Applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    example: ok
+                  unlocked:
+                    type: boolean
+                  unrestricted:
+                    type: boolean
+        '400':
+          description: >-
+            Body is not valid JSON (`bad json`), or `unlocked` is missing or not a boolean
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: >-
+            Wrong password (`{"msg":"wrong password"}`), or the `X-Requested-With`
+            header is missing or not `OpenEVSE` (`{"msg":"csrf"}`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '429':
+          $ref: '#/components/responses/InstallerLocked'
   /update:
     post:
       operationId: updateFirmware

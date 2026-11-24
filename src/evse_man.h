@@ -696,6 +696,28 @@ class EvseManager : public MicroTasks::Task
     }
 
     bool isRapiCommandBlocked(String rapi);
+
+    // Installer override for the HTTP RAPI console (/r): lifts the
+    // isRapiCommandBlocked() filter there until the next reboot. RAM only, never
+    // persisted; MQTT RAPI is not affected.
+    void setRapiConsoleUnlocked(bool unlocked) {
+      _rapiConsoleUnlocked = unlocked;
+    }
+    bool isRapiConsoleUnlocked() {
+      return _rapiConsoleUnlocked;
+    }
+    // True when the console accepts every command: the override above, or a
+    // build with ENABLE_FULL_RAPI.
+    bool isRapiConsoleUnrestricted() {
+#ifdef ENABLE_FULL_RAPI
+      return true;
+#else
+      return _rapiConsoleUnlocked;
+#endif
+    }
+
+  private:
+    bool _rapiConsoleUnlocked = false;
 };
 
 #endif // !_OPENEVSE_EVSE_MAN_H
