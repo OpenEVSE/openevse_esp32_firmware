@@ -16,7 +16,7 @@
 //   POST /installer/maxcurrent {"password","amps"}             -> $SC amps M
 //   POST /installer/rapi       {"password","unlocked"}         -> RAPI console
 //                                                                 filter off/on
-//                                                                 until reboot
+//                                                                 for 30 min
 //
 // The password lives on the charger and is never sent to the browser, so the
 // GUI cannot check it locally - it asks here. Each call sits behind the normal
@@ -202,9 +202,10 @@ void handleInstallerMaxCurrent(MongooseHttpServerRequest *request)
   DBUGF("Installer set hardware max current: %ld (was %ld)", amps, previous);
 }
 
-// Lift (or restore) the RAPI command filter on the HTTP console (/r) until the
-// next reboot. The flag lives in RAM only, so a restart always brings the
-// filter back; MQTT RAPI keeps its filter regardless.
+// Lift (or restore) the RAPI command filter on the HTTP console (/r). The
+// override lapses on its own after RAPI_CONSOLE_UNLOCK_TIMEOUT_MS (30 min) and
+// lives in RAM only, so a restart also brings the filter back; MQTT RAPI keeps
+// its filter regardless. EvseManager writes the event-log row.
 void handleInstallerRapi(MongooseHttpServerRequest *request)
 {
   MongooseHttpServerResponseStream *response;
@@ -224,9 +225,9 @@ void handleInstallerRapi(MongooseHttpServerRequest *request)
   evse.setRapiConsoleUnlocked(unlocked);
 
   response->setCode(200);
-  response->printf("{\"msg\":\"ok\",\"unlocked\":%s,\"unrestricted\":%s}",
+  response->printf("{\"msg\":\"ok\",\"unlocked\":%s,\"unrestricted\":%s,\"remaining\":%lu}",
                    unlocked ? "true" : "false",
-                   evse.isRapiConsoleUnrestricted() ? "true" : "false");
+                   evse.isRapiConsoleUnrestricted() ? "true" : "false",
+                   (unsigned long)evse.getRapiConsoleUnlockRemaining());
   request->send(response);
-  DBUGF("Installer RAPI console unlock: %s", unlocked ? "on" : "off");
 }

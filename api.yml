@@ -2656,13 +2656,20 @@ paths:
   /installer/rapi:
     post:
       operationId: installerSetRapiConsoleUnlocked
-      summary: Lift or restore the RAPI console command filter until reboot
+      summary: Lift or restore the RAPI console command filter for 30 minutes
       description: |
         With `unlocked: true`, the HTTP RAPI console (`/r`) accepts every
-        command, not only `$G`, `$F0` and `$FB`. The setting is held in RAM and
-        is cleared by the next reboot; `unlocked: false` restores the filter at
-        once. RAPI over MQTT keeps its filter either way. `GET /config` reports
-        the state as `rapi_console_unlocked` (this override) and
+        command, not only `$G`, `$F0` and `$FB`, for 30 minutes; unlocking
+        again restarts the 30 minutes. The setting is held in RAM, so a reboot
+        also clears it; `unlocked: false` restores the filter at once. RAPI
+        over MQTT keeps its filter either way. While the override is on, `/r`
+        lets a filtered command through only when the request carries
+        `X-Requested-With: OpenEVSE`; without it the command is still blocked.
+        Unlock, restore and expiry each write an event-log row (`notification`
+        id `rapi_console_unlocked`, `rapi_console_restored` or
+        `rapi_console_expired`). `GET /config` reports the state as
+        `rapi_console_unlocked` (this override),
+        `rapi_console_unlock_remaining` (seconds left, 0 when off) and
         `rapi_console_unrestricted` (the override, or a build with
         `ENABLE_FULL_RAPI`). Sends `X-Requested-With: OpenEVSE`.
       tags:
@@ -2705,6 +2712,9 @@ paths:
                     type: boolean
                   unrestricted:
                     type: boolean
+                  remaining:
+                    type: integer
+                    description: Seconds until the override lapses; 0 when it is off.
         '400':
           description: >-
             Body is not valid JSON (`bad json`), or `unlocked` is missing or not a boolean

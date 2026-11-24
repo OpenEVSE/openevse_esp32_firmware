@@ -2093,9 +2093,18 @@ handleRapi(MongooseHttpServerRequest *request) {
 
   RapiRequest *req = new RapiRequest{request, response, json, request->getParam("rapi")};
 
-  // The installer can lift the filter for this console until reboot
-  // (POST /installer/rapi).
-  if(!evse.isRapiConsoleUnlocked() && evse.isRapiCommandBlocked(req->rapi))
+  // The installer can lift the filter for this console for a while
+  // (POST /installer/rapi). The override is global, and with no web login a
+  // cross-site form POST reaches here unauthenticated, so a command that only
+  // passes because of it must also carry the app's header, which such a form
+  // cannot set. The app's console always sends it.
+  bool blocked = evse.isRapiCommandBlocked(req->rapi);
+  if(blocked && evse.isRapiConsoleUnlocked() &&
+     request->headers("X-Requested-With").equals("OpenEVSE"))
+  {
+    blocked = false;
+  }
+  if(blocked)
   {
     rapiRespond(req, RAPI_RESPONSE_BLOCKED, "");
     return;

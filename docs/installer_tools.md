@@ -12,7 +12,7 @@ NEC 625.42 (2023) lets an EVSE with adjustable current be sized to its *set* cur
 |---|---|
 | Hardware maximum current | Sends `$SC xx M` through OpenEVSE_Lib (`setCurrentCapacityFactoryLimit`). One-time only. |
 | Safety checks | Moved here from Settings → Safety. The GFCI self-test toggle carries the note "Disable if the circuit is protected by a GFCI." |
-| RAPI console access | Lifts the RAPI command filter on the Developer Tools console until the next reboot. |
+| RAPI console access | Lifts the RAPI command filter on the Developer Tools console for 30 minutes (or until the next reboot, if sooner). |
 | Installer password | Change the password that unlocks the page. |
 
 ### Hardware maximum current
@@ -23,9 +23,13 @@ The charger can only report that the command was *sent*. The page waits two seco
 
 ### RAPI console access
 
-Normally the HTTP RAPI console (`/r`, used by Developer Tools) only passes `$G…`, `$F0` and `$FB` (`EvseManager::isRapiCommandBlocked()`); anything else gets `RAPI_RESPONSE_BLOCKED`. The installer can lift that filter for the console with `POST /installer/rapi {"password","unlocked":true}`. The flag is a RAM-only member of `EvseManager`, never written to config, so the next reboot of the gateway always restores the filter; the page also has a button to restore it straight away. RAPI over MQTT keeps its filter regardless.
+Normally the HTTP RAPI console (`/r`, used by Developer Tools) only passes `$G…`, `$F0` and `$FB` (`EvseManager::isRapiCommandBlocked()`); anything else gets `RAPI_RESPONSE_BLOCKED`. The installer can lift that filter for the console with `POST /installer/rapi {"password","unlocked":true}`. The override lapses on its own after 30 minutes (`RAPI_CONSOLE_UNLOCK_TIMEOUT_MS`, a rollover-safe `millis()` deadline that `EvseManager` wakes up to clear); unlocking again restarts the 30 minutes. It is a RAM-only member of `EvseManager`, never written to config, so a reboot of the gateway also restores the filter, and the page has a button to restore it straight away. RAPI over MQTT keeps its filter regardless.
 
-`/config` reports `rapi_console_unlocked` (the override) and `rapi_console_unrestricted` (the override, or a build with `ENABLE_FULL_RAPI`, where the filter never applies). Developer Tools shows a warning banner while the console is unrestricted.
+The override applies to every client of `/r`, not only the installer's session, and on a charger without a web login a cross-site form POST to `/r` is not authenticated at all. So while it is on, a command that only gets through because of the override must also carry `X-Requested-With: OpenEVSE`, which a cross-site form cannot set; without the header the command is still blocked. The GUI console always sends it. Commands the filter allows anyway (`$G…`, `$F0`, `$FB`) are unaffected.
+
+Unlock, restore and expiry each write an event-log row whose `notification` field is `rapi_console_unlocked` (logged as a warning), `rapi_console_restored` or `rapi_console_expired`. Like every event-log row, it is dropped if the clock has not synced yet.
+
+`/config` reports `rapi_console_unlocked` (the override), `rapi_console_unlock_remaining` (seconds left, 0 when off) and `rapi_console_unrestricted` (the override, or a build with `ENABLE_FULL_RAPI`, where the filter never applies). Developer Tools shows a warning banner while the console is unrestricted.
 
 ### GFCI self-test advisory removed
 
@@ -48,7 +52,7 @@ All are `POST`, JSON body, require the normal login and the `X-Requested-With: O
 | `/installer/verify` | `{"password"}` | 200 `ok`, 403 `wrong password`, 429 `locked` |
 | `/installer/password` | `{"current","new"}` | 200 `changed`, 400 `invalid password`, 403, 429 |
 | `/installer/maxcurrent` | `{"password","amps"}` | 200 `sent` (+`requested`, `previous`), 400 `amps out of range` (+`min`, `max`), 403, 429 |
-| `/installer/rapi` | `{"password","unlocked"}` | 200 `ok` (+`unlocked`, `unrestricted`), 400, 403, 429 |
+| `/installer/rapi` | `{"password","unlocked"}` | 200 `ok` (+`unlocked`, `unrestricted`, `remaining`), 400, 403, 429 |
 
 Five wrong passwords lock all four endpoints for 30 seconds (`429` with `retry_after` seconds). The counter is shared and held in RAM, so a reboot clears it.
 
