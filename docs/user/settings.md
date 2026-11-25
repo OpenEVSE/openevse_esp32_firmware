@@ -78,7 +78,9 @@ hardware is present.
   screen is asleep (`tft_standby_leds_off`, off by default); anything that
   wakes the screen lights them again. On chargers with the 2-line character LCD
   instead: the backlight type (RGB, or monochrome for a JuiceBox v2
-  conversion) and the same idle timeout, which switches the LCD backlight
+  conversion), clock format (`lcd_12h_clock`, on by default so the Time,
+  Start, and Stop lines stay 12-hour; turn it off for 24-hour), and the
+  same idle timeout, which switches the LCD backlight
   off; it stays lit while charging or in a fault, and any state change or
   button press lights it again. "Never" keeps it always on.
 - **[About](screenshots/settings-about-dark-desktop.png)** — versions, device

@@ -537,7 +537,9 @@ ConfigOpt *opts[] =
   new ConfigOptVirtualChargeMode(flagsOpt, flagsChanged, "charge_mode", "chmd"),
 
 // flags2 virtual options
-  new ConfigOptVirtualMaskedBool(flags2Opt, flags2Changed, CONFIG2_LABS_ENABLED, CONFIG2_LABS_ENABLED, "labs_enabled", "labs")
+  new ConfigOptVirtualMaskedBool(flags2Opt, flags2Changed, CONFIG2_LABS_ENABLED, CONFIG2_LABS_ENABLED, "labs_enabled", "labs"),
+  // expected 0: the bit is clear on every existing install, and that is 12-hour.
+  new ConfigOptVirtualMaskedBool(flags2Opt, flags2Changed, CONFIG2_LCD_24H_CLOCK, 0, "lcd_12h_clock", "l12")
 };
 
 ConfigJson user_config(opts, sizeof(opts) / sizeof(opts[0]), EEPROM_SIZE, CONFIG_OFFSET, CONFIG_SIZE);

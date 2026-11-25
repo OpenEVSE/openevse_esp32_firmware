@@ -109,6 +109,15 @@ enabled; persisted in the config store). Disable via the config API/MQTT
 (`{"lcd_network_info": false}`) to remove them from the rotation. Fault
 states show fixed two-line error text and never rotate.
 
+The Time line, and the scheduled Start and Stop lines, follow
+`lcd_12h_clock` (boolean, default on). On is 12-hour with AM/PM
+(`Time 3:14:00 PM`, `Start 10:00 PM`). Off is 24-hour (`Time 15:14:00`,
+`Start 22:00`). Elapsed times such as `Left` and `ETA` are durations,
+not clock times, and stay `h:mm:ss`. Clock format is in the 2-line LCD
+section of Settings → Display. Set `{"lcd_12h_clock": false}` for
+24-hour. An existing install keeps 12-hour: the stored bit is clear,
+and that reads as on.
+
 The TFT panel's date/time line (charge header and standby screen) is a
 24-hour clock by default. Set `tft_12h_clock` (boolean, persisted in the
 config store; also on the web UI Display page) to show a 12-hour clock with

@@ -735,8 +735,13 @@ void LcdTask::displayInfoLine(LcdInfoLine line, unsigned long &nextUpdate)
       gettimeofday(&local_time, NULL);
       struct tm timeinfo;
       localtime_r(&local_time.tv_sec, &timeinfo);
-      //strftime(temp, sizeof(temp), "Time %H:%M:%S", &timeinfo);
-      strftime(temp, sizeof(temp), "Time %l:%M:%S %p", &timeinfo);
+      // lcd_12h_clock defaults on, which is the 12-hour clock this panel has
+      // always shown. Off is 24-hour.
+      if(config_lcd_12h_clock()) {
+        strftime(temp, sizeof(temp), "Time %l:%M:%S %p", &timeinfo);
+      } else {
+        strftime(temp, sizeof(temp), "Time %H:%M:%S", &timeinfo);
+      }
       showText(0, 1, temp, true);
       nextUpdate = 1000 - (local_time.tv_usec / 1000);
     } break;
@@ -912,13 +917,16 @@ void LcdTask::displayInfoEventTime(const char *name, Scheduler::EventInstance &e
     int hour = event.getEvent()->getHours();
     int min = event.getEvent()->getMinutes();
 
-    bool pm = hour >= 12;
-    hour = hour % 12;
-    if(0 == hour) {
-      hour = 12;
+    if(config_lcd_12h_clock()) {
+      bool pm = hour >= 12;
+      hour = hour % 12;
+      if(0 == hour) {
+        hour = 12;
+      }
+      sprintf(temp, "%d:%02d %s", hour, min, pm ? "PM" : "AM");
+    } else {
+      sprintf(temp, "%02d:%02d", hour, min);
     }
-
-    sprintf(temp, "%d:%02d %s", hour, min, pm ? "PM" : "AM");
   } else {
     sprintf(temp, "--:--");
   }

@@ -230,6 +230,10 @@ extern uint32_t flags2;
 // Web UI: reveal OpenEVSE Labs (in-development) features. Stored on the
 // device so it applies to every browser.
 #define CONFIG2_LABS_ENABLED        (1 << 0)
+// Character LCD clock. Inverted: bit SET is 24-hour. Clear — the default,
+// and what an existing install already has stored — keeps the 12-hour clock
+// the 16x2 has always shown, so lcd_12h_clock reads true until changed.
+#define CONFIG2_LCD_24H_CLOCK       (1 << 1)
 
 #define INITIAL_CONFIG_VERSION  1
 
@@ -322,6 +326,11 @@ inline bool config_rfid_enabled() {
 
 inline bool config_labs_enabled() {
   return CONFIG2_LABS_ENABLED == (flags2 & CONFIG2_LABS_ENABLED);
+}
+
+// 12-hour on the 16x2 character LCD. True while CONFIG2_LCD_24H_CLOCK is clear.
+inline bool config_lcd_12h_clock() {
+  return 0 == (flags2 & CONFIG2_LCD_24H_CLOCK);
 }
 
 inline bool config_factory_write_lock() {
