@@ -14,6 +14,9 @@
 //   POST /installer/verify     {"password"}                    -> check it
 //   POST /installer/password   {"current","new"}               -> change it
 //   POST /installer/maxcurrent {"password","amps"}             -> $SC amps M
+//   POST /installer/rapi       {"password","unlocked"}         -> RAPI console
+//                                                                 filter off/on
+//                                                                 for 30 min
 //
 // The password lives on the charger and is never sent to the browser, so the
 // GUI cannot check it locally - it asks here. Each call sits behind the normal
@@ -197,4 +200,34 @@ void handleInstallerMaxCurrent(MongooseHttpServerRequest *request)
   response->printf("{\"msg\":\"sent\",\"requested\":%ld,\"previous\":%ld}", amps, previous);
   request->send(response);
   DBUGF("Installer set hardware max current: %ld (was %ld)", amps, previous);
+}
+
+// Lift (or restore) the RAPI command filter on the HTTP console (/r). The
+// override lapses on its own after RAPI_CONSOLE_UNLOCK_TIMEOUT_MS (30 min) and
+// lives in RAM only, so a restart also brings the filter back; MQTT RAPI keeps
+// its filter regardless. EvseManager writes the event-log row.
+void handleInstallerRapi(MongooseHttpServerRequest *request)
+{
+  MongooseHttpServerResponseStream *response;
+  DynamicJsonDocument in(256);
+  if(!installerPrologue(request, response, in)) {
+    return;
+  }
+  if(installerCheckPassword(request, response, in["password"] | "")) {
+    return;
+  }
+  if(!in["unlocked"].is<bool>()) {
+    installerReply(request, response, 400, "unlocked must be true or false");
+    return;
+  }
+
+  bool unlocked = in["unlocked"];
+  evse.setRapiConsoleUnlocked(unlocked);
+
+  response->setCode(200);
+  response->printf("{\"msg\":\"ok\",\"unlocked\":%s,\"unrestricted\":%s,\"remaining\":%lu}",
+                   unlocked ? "true" : "false",
+                   evse.isRapiConsoleUnrestricted() ? "true" : "false",
+                   (unsigned long)evse.getRapiConsoleUnlockRemaining());
+  request->send(response);
 }

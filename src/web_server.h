@@ -95,5 +95,6 @@ bool credentialsMatch(const char *a, const char *b);
 void handleInstallerVerify(MongooseHttpServerRequest *request);
 void handleInstallerPassword(MongooseHttpServerRequest *request);
 void handleInstallerMaxCurrent(MongooseHttpServerRequest *request);
+void handleInstallerRapi(MongooseHttpServerRequest *request);
 
 #endif // _EMONESP_WEB_SERVER_H
