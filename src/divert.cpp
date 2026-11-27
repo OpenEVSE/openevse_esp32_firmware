@@ -50,12 +50,16 @@ DivertTask::DivertTask(EvseManager &evse) :
   _mode(DivertMode::Normal),
   _state(EvseState::None),
   _last_update(0),
+  _failsafe_since(0),
   _charge_rate(0),
   _evseState(this),
   _available_current(0),
   _smoothed_available_current(0),
   _min_charge_end(0),
   _timer_divert_active(false),
+  _stale(false),
+  _stale_was_active(false),
+  _stale_charge_rate(0),
   _solar(0),
   _grid_ie(0)
 {
@@ -97,6 +101,90 @@ unsigned long DivertTask::loop(MicroTasks::WakeReason reason)
     }
   }
 
+  // While Eco is on and the failsafe is enabled, wake often enough to notice
+  // a dead feed. 10 s is the same order as a normal solar sample.
+  // 0 disables it, including a pause that is already in effect.
+  if(_mode == DivertMode::Eco && divert_data_maxinterval == 0)
+  {
+    if(_stale)
+    {
+      DBUGLN("Divert failsafe disabled, clearing stale pause");
+      _stale = false;
+      if(_stale_was_active)
+      {
+        _charge_rate = _stale_charge_rate;
+        _state = EvseState::Active;
+        EvseProperties props(EvseState::Active);
+        props.setChargeCurrent(_charge_rate);
+        _evse->claim(EvseClient_OpenEVSE_Divert,
+          _timer_divert_active ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Divert,
+          props);
+      }
+      _stale_was_active = false;
+
+      JsonDocument event;
+      event["divert_stale"] = false;
+      event["divert_active"] = isActive();
+      event["charge_rate"] = _charge_rate;
+      event_send(event);
+    }
+    return MicroTask.Infinate;
+  }
+  if(_mode == DivertMode::Eco && divert_data_maxinterval > 0)
+  {
+    // Unsigned subtraction wraps across the 49-day millis() rollover. A signed
+    // cast of that elapsed time becomes negative after about 24.9 days.
+    // This difference is only sampled every poll. A limit inside that window
+    // of the wrap is skipped, and a silent feed then stays unpaused for
+    // another full cycle. Two polls of headroom still catch a late wake.
+    const uint32_t poll_ms = 10000u;
+    const uint32_t max_ms = 4294967295u - (poll_ms * 2u);
+    uint32_t limit_ms = divert_data_maxinterval;
+    if(limit_ms > max_ms / 1000u)
+    {
+      limit_ms = max_ms;
+    }
+    else
+    {
+      limit_ms *= 1000u;
+    }
+    uint32_t now = millis();
+    if(!_stale && (now - _failsafe_since) >= limit_ms)
+    {
+      // The last charge decision would otherwise run forever and import from
+      // the grid. Pause immediately — do not wait out divert_min_charge_time.
+      // Drop the smoothed surplus too, or the next sample decays from the old
+      // value for divert_decay_smoothing_time and charging starts again.
+      DBUGLN("Divert feed stale, pausing charge");
+      _stale = true;
+      _stale_was_active = _evse->getState(EvseClient_OpenEVSE_Divert) == EvseState::Active;
+      _stale_charge_rate = _charge_rate;
+      _available_current = 0;
+      _smoothed_available_current = 0;
+      _charge_rate = 0;
+      _state = EvseState::Disabled;
+
+      if(_stale_was_active)
+      {
+        // Same priority as a normal low-surplus stop. Disabled at Divert (50)
+        // would outrank a priority-10 claim that the normal stop allows.
+        EvseProperties props(EvseState::Disabled);
+        _evse->claim(EvseClient_OpenEVSE_Divert,
+          _timer_divert_active ? EvseManager_Priority_TimerFeature : EvseManager_Priority_Default,
+          props);
+      }
+
+      JsonDocument event;
+      event["divert_stale"] = true;
+      event["divert_active"] = false;
+      event["charge_rate"] = 0;
+      event["available_current"] = 0;
+      event["smoothed_available_current"] = 0;
+      event_send(event);
+    }
+    return poll_ms;
+  }
+
   return MicroTask.Infinate;
 }
 
@@ -130,11 +218,19 @@ void DivertTask::setMode(DivertMode mode)
     switch(_mode)
     {
       case DivertMode::Normal:
+        _stale = false;
+        _stale_was_active = false;
         _evse->release(EvseClient_OpenEVSE_Divert);
         break;
 
       case DivertMode::Eco:
       {
+        _stale = false;
+        _stale_was_active = false;
+        // Arm the failsafe here so a feed that is already quiet does not look
+        // stale for the whole uptime the moment Eco is selected. Leave
+        // _last_update alone: divert_update is the age of the last sample.
+        _failsafe_since = millis();
         _min_charge_end = 0;
 
         event["charge_rate"] = _charge_rate = 0;
@@ -154,7 +250,11 @@ void DivertTask::setMode(DivertMode mode)
         return;
     }
 
+    event["divert_stale"] = false;
     event_send(event);
+    if(_mode == DivertMode::Eco) {
+      MicroTask.wakeTask(this);
+    }
   }
 }
 
@@ -162,6 +262,10 @@ void DivertTask::setMode(DivertMode mode)
 void DivertTask::update_state()
 {
   Profile_Start(DivertTask::update_state);
+
+  // A sample means the feed is alive again. Normal divert math below
+  // replaces the stale pause, including the charge claim.
+  _stale = false;
 
   JsonDocument event;
   event["divert_update"] = 0;
@@ -274,6 +378,7 @@ void DivertTask::update_state()
       }
     }
 
+    event["divert_stale"] = false;
     event["divert_active"] = isActive();
     event["charge_rate"] = _charge_rate;
     event["trigger_current"] = trigger_current;
@@ -288,6 +393,7 @@ void DivertTask::update_state()
   emoncms_publish(event);
 
   _last_update = millis();
+  _failsafe_since = _last_update;
 
   Profile_End(DivertTask::update_state, 5);
 } //end divert_update_state

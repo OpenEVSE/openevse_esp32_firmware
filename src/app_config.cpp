@@ -163,6 +163,7 @@ double divert_PV_ratio;
 uint32_t divert_attack_smoothing_time;
 uint32_t divert_decay_smoothing_time;
 uint32_t divert_min_charge_time;
+uint32_t divert_data_maxinterval; // seconds; 0 disables the stale-feed failsafe
 
 // Shelly LNM settings
 bool shelly_lnm_enabled;
@@ -436,6 +437,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(divert_attack_smoothing_time, 20, "divert_attack_smoothing_time", "das"),
   new ConfigOptDefinition<uint32_t>(divert_decay_smoothing_time, 600, "divert_decay_smoothing_time", "dds"),
   new ConfigOptDefinition<uint32_t>(divert_min_charge_time, 600, "divert_min_charge_time", "dt"),
+  new ConfigOptDefinition<uint32_t>(divert_data_maxinterval, 3600, "divert_data_maxinterval", "ddm"),
 
 // Shelly LNM settings
   new ConfigOptDefinition<bool>(shelly_lnm_enabled, false, "shelly_lnm_enabled", "sle"),
@@ -744,6 +746,9 @@ void config_changed(String name)
     if(!divert.isTimerDivertActive()) {
       divert.setMode((config_divert_enabled() && 1 == config_charge_mode()) ? DivertMode::Eco : DivertMode::Normal);
     }
+  } else if(name.startsWith("divert_")) {
+    // Picks up divert_data_maxinterval while Eco is asleep (interval was 0).
+    MicroTask.wakeTask(&divert);
   } else if(name.startsWith("current_shaper_")) {
     shaper.notifyConfigChanged(config_current_shaper_enabled()?1:0,current_shaper_max_pwr);
   } else if(name.startsWith("temp_throttle_")) {

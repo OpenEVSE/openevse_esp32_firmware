@@ -58,15 +58,18 @@ void Peer::begin()
 
 void Peer::applyInputs(long t_sec)
 {
-  if (!_scenario.solar.empty()) {
-    last_solar_w = _scenario.solar.valueAt(t_sec);
-    _divert.setSolar((int) last_solar_w);
+  // A paused divert feed must not freeze the shaper or the AC voltage.
+  if (acceptsDivertSamples()) {
+    if (!_scenario.solar.empty()) {
+      last_solar_w = _scenario.solar.valueAt(t_sec);
+      _divert.setSolar((int) last_solar_w);
+    }
+    if (!_scenario.grid_ie.empty()) {
+      last_grid_ie_w = _scenario.grid_ie.valueAt(t_sec);
+      _divert.setGridIe((int) last_grid_ie_w);
+    }
+    _divert.update_state();
   }
-  if (!_scenario.grid_ie.empty()) {
-    last_grid_ie_w = _scenario.grid_ie.valueAt(t_sec);
-    _divert.setGridIe((int) last_grid_ie_w);
-  }
-  _divert.update_state();
 
   if (!_scenario.live_pwr.empty()) {
     last_live_pwr_w = _scenario.live_pwr.valueAt(t_sec);
@@ -108,6 +111,7 @@ void Peer::applyEvents(long t_sec)
         _manual.claim(props);
       }
     }
+    if (e.set_samples) _divert_samples = e.samples;
     _next_event_idx++;
   }
 }

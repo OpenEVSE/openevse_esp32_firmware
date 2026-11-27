@@ -1,5 +1,6 @@
 from os.path import join, isfile, isdir, basename
 from os import listdir, system, environ
+import os
 from pprint import pprint
 import hashlib
 import pathlib
@@ -237,11 +238,28 @@ def make_static(env, target, source, prefix, files_dir):
     with open(target_file, "w") as output_file:
         output_file.write(output)
 
+def prune_stale_headers(dest, prefix, files):
+    """Delete generated headers whose source file is no longer in dist.
+
+    Asset names carry a content hash, so every GUI change produces new headers.
+    Removing the old ones here means `git status` shows exactly the headers a
+    pointer bump adds and deletes.
+    """
+    if not files:
+        # An empty dist (e.g. mid-rebuild) must not wipe every header.
+        return
+    expected = set(prefix+"."+make_safe(file)+".h" for file in files)
+    for header in glob.glob(join(dest, prefix+".*.h")):
+        if basename(header) not in expected:
+            print("Removing stale {}".format(header))
+            os.remove(header)
+
 def process_html_app(source, dest, env, prefix, static_func):
     web_server_static_files = join(dest, prefix+"_static_files.h")
     web_server_static = join(env.subst("$BUILD_DIR"), "src/"+prefix+"_static.cpp.o")
 
     files = filtered_listdir(source)
+    prune_stale_headers(dest, prefix, files)
 
     for file in files:
         data_file = join(source, file)

@@ -235,6 +235,10 @@ bool Scenario::loadFromFile(const std::string &path)
             e.manual_state = ms;
           }
         }
+        if (!ej["samples"].isNull()) {
+          e.set_samples = true;
+          e.samples = ej["samples"].as<bool>();
+        }
         p.events.push_back(e);
       }
     }

@@ -54,7 +54,8 @@ class DivertTask : public MicroTasks::Task
     EvseManager *_evse;
     DivertMode _mode;
     EvseState _state;
-    uint32_t _last_update;
+    uint32_t _last_update;     // millis() of the last applied solar/grid sample
+    uint32_t _failsafe_since;  // millis() when the stale-feed clock started
     int _charge_rate;
     MicroTasks::EventListener _evseState;
     double _available_current;
@@ -63,6 +64,9 @@ class DivertTask : public MicroTasks::Task
     uint8_t _evse_last_state;
     InputFilter _inputFilter;
     bool _timer_divert_active;  // true while a scheduler timer window controls divert
+    bool _stale;                // true once the solar/grid feed has exceeded divert_data_maxinterval
+    bool _stale_was_active;     // the failsafe replaced an Active charge claim
+    int _stale_charge_rate;     // charge rate to restore if the failsafe is turned off
     int _solar;
     int _grid_ie;
 
@@ -116,6 +120,11 @@ class DivertTask : public MicroTasks::Task
 
     uint32_t getLastUpdate() {
       return _last_update;
+    }
+
+    // True when Eco has paused because solar/grid data stopped arriving.
+    bool isStale() const {
+      return _stale;
     }
 
     int getChargeRate() {

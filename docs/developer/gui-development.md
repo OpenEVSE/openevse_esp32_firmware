@@ -41,6 +41,11 @@ The firmware build embeds `gui-nightshift/dist` as C headers into
 `src/web_static/` (via `scripts/extra_script.py`). Those generated headers are
 **tracked** and must be committed whenever the GUI changes.
 
+Asset file names carry a content hash, so each GUI change produces new
+headers. The build deletes any `web_server.*.h` header that no longer has a
+matching file in `dist/`, so `git status` lists exactly the headers the bump
+adds and removes, and `git add src/web_static` stages both.
+
 The full cycle for a GUI change:
 
 ```bash

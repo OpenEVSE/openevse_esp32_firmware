@@ -104,6 +104,7 @@ paths:
                     grid_ie: 0
                     charge_rate: 7
                     divert_update: 0
+                    divert_stale: false
                     ota_update: 0
                     time: '2020-05-12T17:53:48Z'
                     offset: '+0000'
