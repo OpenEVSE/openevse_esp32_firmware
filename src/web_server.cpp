@@ -1067,21 +1067,20 @@ void handleStatusPost(MongooseHttpServerRequest *request, MongooseHttpServerResp
       shaper.setLivePwr(shaper_live_pwr);
       DBUGF("shaper: live power:%dW", shaper.getLivePwr());
     }
+    bool update_divert = false;
     if(!doc["solar"].isNull()) {
       int solar = doc["solar"];
       divert.setSolar(solar);
       DBUGF("solar:%dW", solar);
-      divert.update_state();
-      // recalculate shaper
-      if (shaper.getState()) {
-        shaper.shapeCurrent();
-      }
-      send_event = false; // Divert sends the event so no need to send here
+      update_divert = true;
     }
-    else if(!doc["grid_ie"].isNull()) {
+    if(!doc["grid_ie"].isNull()) {
       int grid_ie = doc["grid_ie"];
       divert.setGridIe(grid_ie);
       DBUGF("grid:%dW", grid_ie);
+      update_divert = true;
+    }
+    if (update_divert) {
       divert.update_state();
       // recalculate shaper
       if (shaper.getState()) {
