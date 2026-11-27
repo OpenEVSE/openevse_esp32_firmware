@@ -64,6 +64,13 @@ typedef uint32_t EvseClient;
 #define EvseManager_Priority_Safety   5000
 #define EvseManager_Priority_Error   10000
 
+// How long the installer's RAPI console override (POST /installer/rapi) lasts
+// before the filter comes back on its own. Must stay far below the ~24.8-day
+// horizon of deadline_timer.h.
+#ifndef RAPI_CONSOLE_UNLOCK_TIMEOUT_MS
+#define RAPI_CONSOLE_UNLOCK_TIMEOUT_MS (30UL * 60UL * 1000UL)
+#endif
+
 #define EVSE_VEHICLE_SOC    (1 << 0)
 #define EVSE_VEHICLE_RANGE  (1 << 1)
 #define EVSE_VEHICLE_ETA    (1 << 2)
@@ -696,6 +703,31 @@ class EvseManager : public MicroTasks::Task
     }
 
     bool isRapiCommandBlocked(String rapi);
+
+    // Installer override for the HTTP RAPI console (/r): lifts the
+    // isRapiCommandBlocked() filter there for RAPI_CONSOLE_UNLOCK_TIMEOUT_MS,
+    // or until the next reboot if that comes first. RAM only, never persisted;
+    // MQTT RAPI is not affected. Unlocking again restarts the timer. Every
+    // change (unlock, restore, expiry) writes an event-log row.
+    void setRapiConsoleUnlocked(bool unlocked);
+    bool isRapiConsoleUnlocked();
+    // Seconds until the override expires; 0 when it is off.
+    uint32_t getRapiConsoleUnlockRemaining();
+    // True when the console accepts every command: the override above, or a
+    // build with ENABLE_FULL_RAPI.
+    bool isRapiConsoleUnrestricted() {
+#ifdef ENABLE_FULL_RAPI
+      return true;
+#else
+      return isRapiConsoleUnlocked();
+#endif
+    }
+
+  private:
+    // millis() at which the override lapses; 0 = off (deadline_timer.h).
+    uint32_t _rapiConsoleUnlockUntil = 0;
+    void expireRapiConsoleUnlock();
+    void logRapiConsoleChange(EventType type, const char *id);
 };
 
 #endif // !_OPENEVSE_EVSE_MAN_H
