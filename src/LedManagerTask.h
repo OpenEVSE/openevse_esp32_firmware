@@ -84,6 +84,9 @@ class LedManagerTask : public MicroTasks::Task
 
     // Blank the LEDs while the display is in standby (tft_standby_leds_off).
     void setStandbyDark(bool dark);
+
+    // Re-pick the pattern after a config change that affects it (wifi_setup_prompt).
+    void refresh();
 };
 
 extern LedManagerTask ledManager;
