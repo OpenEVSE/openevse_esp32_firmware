@@ -18,4 +18,13 @@ bool bl_should_standby(bool keep_awake, uint32_t timeout_s, uint32_t idle_ms);
 // standby and the owner has opted in with tft_standby_leds_off.
 bool bl_leds_dark(bool standby, bool leds_off_in_standby);
 
+// Whether the full-screen WiFi setup QR should own the display.
+//   ap_mode    : the gateway is known to be in softAP mode (not a WiFi client)
+//   qr_enabled : wifi_setup_prompt (the owner can turn the QR off for good)
+//   vehicle    : a vehicle is connected
+//   fault      : the EVSE is faulted, or the fault page is still being held
+// A station with no WiFi at the site stays in AP mode indefinitely, so the QR
+// gives way to the charge or fault screen whenever the charger is in use.
+bool bl_show_setup_screen(bool ap_mode, bool qr_enabled, bool vehicle, bool fault);
+
 #endif // __LVGL_TFT_BACKLIGHT_H
