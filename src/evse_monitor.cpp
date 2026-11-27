@@ -687,9 +687,9 @@ void EvseMonitor::disable()
   });
 }
 
-void EvseMonitor::restart()
+void EvseMonitor::restart(std::function<void(int ret)> callback)
 {
-  _openevse.restart([this](int ret)
+  _openevse.restart([this, callback](int ret)
   {
     DBUGF("EVSE: reboot - complete %d", ret);
     if(RAPI_RESPONSE_OK == ret) {
@@ -697,6 +697,9 @@ void EvseMonitor::restart()
     }
     else {
       DBUGVAR(ret);
+    }
+    if(callback) {
+      callback(ret);
     }
   });
 }

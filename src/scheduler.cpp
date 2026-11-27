@@ -187,7 +187,9 @@ Scheduler::Scheduler(EvseManager &evse) :
   _version(0),
   _plan_version(0),
   _activeFeature(SchedulerFeature::None),
-  _activeLimitType(SchedulerLimitType::None)
+  _activeLimitType(SchedulerLimitType::None),
+  _nextRebootAt(0),
+  _rebootCheckedUntil(0)
 {
 
 }
@@ -321,6 +323,19 @@ unsigned long Scheduler::loop(MicroTasks::WakeReason reason)
     delay = _activeEvent.getNext().getDelay(currentDay, currentOffset) * 1000;
     DBUGVAR(delay);
   }
+
+  // Scheduled reboots run alongside the window plan: fire one that is due,
+  // then re-derive the next from the clock (also picks up time changes).
+  time_t now = time(NULL);
+  handleReboot(now);
+  computeNextReboot(now);
+  if(_nextRebootAt > now) {
+    uint32_t rebootDelay = (uint32_t)(_nextRebootAt - now) * 1000;
+    if(rebootDelay < delay) {
+      delay = rebootDelay;
+    }
+  }
+
   return delay;
 }
 
@@ -368,11 +383,21 @@ void Scheduler::buildSchedule()
 {
   std::vector<Event *>by_week[SCHEDULER_DAYS_IN_A_WEEK];
 
+  // A schedule change (load, add, edit, delete) is judged from now on: a
+  // reboot rule created or moved to a time that has just passed neither
+  // fires nor reports "missed".
+  _rebootCheckedUntil = time(NULL);
+
   // Sort out which events happen on which days
   for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
   {
     Event *event = &_events[i];
-    if(event->isValid() && event->isEnabled())
+    // Reboot events are point-in-time triggers, not window boundaries: in
+    // the plan they would become the current event and hold its state until
+    // the next event. handleReboot() runs them instead. A rule switched off
+    // drops out of the plan entirely (#1403).
+    if(event->isValid() && event->isEnabled() &&
+       event->getFeature() != SchedulerFeature::Reboot)
     {
       uint8_t days = event->getDays();
       for(int day = 0; day < SCHEDULER_DAYS_IN_A_WEEK; day++)
@@ -1003,7 +1028,7 @@ void Scheduler::getCurrentTime(int &day, int32_t &offset)
 // ── Event feature/limit string converters ────────────────────────────────────
 
 static const char * const feature_names[] = {
-  "none", "divert", "shaper", "ocpp", "rfid", "current"
+  "none", "divert", "shaper", "ocpp", "rfid", "current", "reboot"
 };
 
 bool Scheduler::Event::setFeature(const char *name)
@@ -1050,6 +1075,179 @@ const char *Scheduler::Event::getLimitName()
     return limit_names[idx];
   }
   return limit_names[0];
+}
+
+// ── Scheduled reboot ─────────────────────────────────────────────────────────
+
+// Before this the clock has not been set (SNTP / EVSE RTC not synced yet), so
+// day-of-week and time-of-day mean nothing.
+#define SCHEDULER_REBOOT_MIN_VALID_TIME ((time_t)1609459200)  // 2021-01-01
+// A reboot that is due but was reached this much later (a clock step forward
+// past it) is dropped rather than fired at the wrong time.
+#define SCHEDULER_REBOOT_GRACE_SEC 120
+// No scheduled reboot this soon after boot, so a clock that comes back a
+// little behind the reboot time can't reboot the station twice.
+#define SCHEDULER_REBOOT_MIN_UPTIME_MS (2UL * 60UL * 1000UL)
+
+#define SCHEDULER_SECS_IN_A_WEEK (SCHEDULER_DAYS_IN_A_WEEK * 24L * 3600L)
+
+// Local time of `event` on the date `dayOffset` days from `today`, or 0 if the
+// event does not run on that weekday. mktime() on local wall-clock fields keeps
+// "03:00" at 03:00 across DST, and normalises a negative or overflowing day.
+static time_t rebootOccurrence(Scheduler::Event *event, const tm &today, int dayOffset)
+{
+  int weekday = ((today.tm_wday + dayOffset) % SCHEDULER_DAYS_IN_A_WEEK + SCHEDULER_DAYS_IN_A_WEEK)
+                % SCHEDULER_DAYS_IN_A_WEEK;
+  if(!(event->getDays() & (1 << weekday))) {
+    return 0;
+  }
+
+  tm candidate = today;
+  candidate.tm_mday += dayOffset;
+  candidate.tm_hour = event->getHours();
+  candidate.tm_min = event->getMinutes();
+  candidate.tm_sec = event->getSeconds();
+  candidate.tm_isdst = -1;
+  return mktime(&candidate);
+}
+
+static void sendRebootEvent(uint32_t id, const char *outcome)
+{
+  JsonDocument evt;
+  evt["schedule_reboot"] = outcome;
+  evt["schedule_reboot_id"] = id;
+  event_send(evt);
+}
+
+void Scheduler::computeNextReboot(time_t now)
+{
+  _nextRebootAt = 0;
+
+  if(now < SCHEDULER_REBOOT_MIN_VALID_TIME) {
+    return;
+  }
+
+  tm today;
+  localtime_r(&now, &today);
+
+  for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
+  {
+    Event *event = &_events[i];
+    // A reboot rule switched off (enabled == false, #1403) never fires.
+    if(!event->isValid() || !event->isEnabled() ||
+       event->getFeature() != SchedulerFeature::Reboot) {
+      continue;
+    }
+
+    // Days 0..7: today through the same weekday next week, so a weekly
+    // reboot whose time has already passed today still finds next week's.
+    for(int d = 0; d <= SCHEDULER_DAYS_IN_A_WEEK; d++)
+    {
+      time_t at = rebootOccurrence(event, today, d);
+      // Strictly in the future: a reboot due "now" was dealt with by
+      // handleReboot() just before this.
+      if(at > now) {
+        if(0 == _nextRebootAt || at < _nextRebootAt) {
+          _nextRebootAt = at;
+        }
+        break; // later days of this event can only be later
+      }
+    }
+  }
+
+  DBUGF("Scheduler: next reboot %ld", (long)_nextRebootAt);
+}
+
+void Scheduler::handleReboot(time_t now)
+{
+  if(now < SCHEDULER_REBOOT_MIN_VALID_TIME) {
+    return;
+  }
+
+  time_t from = _rebootCheckedUntil;
+  _rebootCheckedUntil = now;
+
+  // First valid clock reading (boot, first clock sync): nothing to catch up.
+  // A clock that did not advance or stepped back has nothing new either.
+  if(from < SCHEDULER_REBOOT_MIN_VALID_TIME || from >= now) {
+    return;
+  }
+  // A clock step of over a week only needs the last week scanned.
+  if(now - from > SCHEDULER_SECS_IN_A_WEEK) {
+    from = now - SCHEDULER_SECS_IN_A_WEEK;
+  }
+
+  tm today;
+  localtime_r(&now, &today);
+
+  // Each rule's latest occurrence in (from, now] is judged on its own
+  // lateness, read from the events as they are now: a rule deleted or moved
+  // since the last check can't fire, and an earlier rule being too late does
+  // not hide a later one that is still within grace.
+  uint32_t fireId = SCHEDULER_EVENT_NULL;
+  time_t fireAt = 0;
+  for(int i = 0; i < SCHEDULER_MAX_EVENTS; i++)
+  {
+    Event *event = &_events[i];
+    // A reboot rule switched off (enabled == false, #1403) never fires.
+    if(!event->isValid() || !event->isEnabled() ||
+       event->getFeature() != SchedulerFeature::Reboot) {
+      continue;
+    }
+
+    // Today back to the same weekday last week, latest first.
+    for(int d = 0; d >= -SCHEDULER_DAYS_IN_A_WEEK; d--)
+    {
+      time_t at = rebootOccurrence(event, today, d);
+      if(0 == at || at > now) {
+        continue;
+      }
+      if(at <= from) {
+        break; // already dealt with, and earlier days are older still
+      }
+
+      if(now - at > SCHEDULER_REBOOT_GRACE_SEC) {
+        // Reached too late (the clock stepped forward past it): not fired at
+        // the wrong time.
+        DBUGF("Scheduler: reboot %u missed, %ld s late", event->getId(), (long)(now - at));
+        sendRebootEvent(event->getId(), "missed");
+      } else if(0 == fireAt || at < fireAt) {
+        fireAt = at;
+        fireId = event->getId();
+      }
+      break; // only the latest occurrence of each rule counts
+    }
+  }
+
+  if(SCHEDULER_EVENT_NULL == fireId) {
+    return;
+  }
+
+  if(uptimeMillis() < SCHEDULER_REBOOT_MIN_UPTIME_MS) {
+    DBUGF("Scheduler: reboot %u missed, just booted", fireId);
+    sendRebootEvent(fireId, "missed");
+    return;
+  }
+
+  // Never interrupt a session in progress. Connected but not charging
+  // (state B, sleeping, finished) is fine to reboot.
+  if(_evse->isCharging()) {
+    DBUGF("Scheduler: reboot %u aborted, vehicle charging", fireId);
+    sendRebootEvent(fireId, "skipped_charging");
+    return;
+  }
+
+  DBUGF("Scheduler: scheduled reboot %u", fireId);
+  sendRebootEvent(fireId, "rebooting");
+
+  // Controller first ($FR), then the gateway once the controller has answered.
+  // The RAPI callback also runs on error and timeout, so the gateway restarts
+  // even if the controller never replies; restart_system() adds 1 s so the
+  // event above gets out first.
+  _evse->restartEvse([](int ret) {
+    DBUGF("Scheduler: EVSE restart returned %d, restarting gateway", ret);
+    restart_system();
+  });
 }
 
 // ── Scheduler feature/limit helpers ──────────────────────────────────────────

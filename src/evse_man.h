@@ -636,8 +636,10 @@ class EvseManager : public MicroTasks::Task
       _monitor.setCableTempPin(source, pin, callback);
     }
 #endif // ENABLE_CABLE_TEMP
-    void restartEvse() {
-      _monitor.restart();
+    // callback (optional) runs once the $FR request completes, on success,
+    // error or timeout alike.
+    void restartEvse(std::function<void(int ret)> callback = NULL) {
+      _monitor.restart(callback);
     }
 
     // Get/set the vehicle state

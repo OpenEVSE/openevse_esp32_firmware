@@ -69,8 +69,11 @@ class TestScheduleRoutes:
 
     def test_logs_export_is_not_shadowed(self, evse_instance):
         r = requests.get(url(evse_instance, "/logs/export"), timeout=REQUEST_TIMEOUT)
-        # Answered by "/logs/#" as page "export" this was a JSON 404.
-        assert not (r.status_code == 404 and "Not found" in r.text), f"{r.status_code}: {r.text[:200]}"
+        # Answered by "/logs/#" as page "export" this was a JSON 404. Require
+        # the CSV export itself, not just "not that 404".
+        assert r.status_code == 200, f"{r.status_code}: {r.text[:200]}"
+        assert "session_history.csv" in r.headers.get("Content-Disposition", ""), r.headers
+        assert r.text.startswith("Time,Type,State,"), r.text[:200]
 
 
 # Each test gets its own emulator + firmware pair (evse_instance), so the
