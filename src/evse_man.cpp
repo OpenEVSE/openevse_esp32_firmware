@@ -13,6 +13,7 @@
 #include "debug.h"
 
 #include "event_log.h"
+#include "deadline_timer.h"
 #include "divert.h"
 #include "current_shaper.h"
 #include "manual.h"
@@ -366,6 +367,10 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   DBUGVAR(_monitor.getEvseState());
   DBUGVAR(_monitor.getPilotState());
 
+  // Lapse the installer's RAPI console override on time even if nothing asks
+  // about it: the wake scheduled at the end of this loop lands here.
+  expireRapiConsoleUnlock();
+
   // If we are not connected yet try and connect to the EVSE module
   if(!_openevse.isConnected())
   {
@@ -448,6 +453,12 @@ unsigned long EvseManager::loop(MicroTasks::WakeReason reason)
   {
     _evaluateTargetState = false;
     setTargetState(_targetProperties);
+  }
+
+  // Wake again when the RAPI console override is due to lapse.
+  if(_rapiConsoleUnlockUntil) {
+    int32_t left = (int32_t)(_rapiConsoleUnlockUntil - millis());
+    return left > 0 ? (unsigned long)left : 1;
   }
   return MicroTask.Infinate;
 }
@@ -681,6 +692,65 @@ bool EvseManager::isRapiCommandBlocked(String rapi)
     // For commands starting with $G, $F0 o $FB
     return !(rapi.startsWith("$G") || rapi.startsWith("$F0") || rapi.startsWith("$FB"));
   #endif
+}
+
+void EvseManager::setRapiConsoleUnlocked(bool unlocked)
+{
+  bool was = isRapiConsoleUnlocked();
+  if(unlocked) {
+    // Unlocking again restarts the clock. 0 means "off", so never store it.
+    uint32_t until = millis() + RAPI_CONSOLE_UNLOCK_TIMEOUT_MS;
+    _rapiConsoleUnlockUntil = until ? until : 1;
+    logRapiConsoleChange(EventType::Warning, "rapi_console_unlocked");
+  } else {
+    _rapiConsoleUnlockUntil = 0;
+    if(was) {
+      logRapiConsoleChange(EventType::Information, "rapi_console_restored");
+    }
+  }
+  // loop() schedules its next wake for the expiry; have it work that out again.
+  MicroTask.wakeTask(this);
+}
+
+bool EvseManager::isRapiConsoleUnlocked()
+{
+  expireRapiConsoleUnlock();
+  return 0 != _rapiConsoleUnlockUntil;
+}
+
+uint32_t EvseManager::getRapiConsoleUnlockRemaining()
+{
+  expireRapiConsoleUnlock();
+  return deadline_timer_remaining_s(_rapiConsoleUnlockUntil, millis());
+}
+
+void EvseManager::expireRapiConsoleUnlock()
+{
+  if(deadline_timer_expired(_rapiConsoleUnlockUntil, millis())) {
+    _rapiConsoleUnlockUntil = 0;
+    logRapiConsoleChange(EventType::Information, "rapi_console_expired");
+  }
+}
+
+// One event-log row per change, shaped like the state-change rows in loop();
+// the id rides in the row's "notification" field. log() still drops the row
+// before the clock has synced, as it does for every other row.
+void EvseManager::logRapiConsoleChange(EventType type, const char *id)
+{
+  DBUGF("RAPI console override: %s", id);
+  _eventLog.log(type,
+                getState(),
+                _monitor.getEvseState(),
+                _monitor.getFlags(),
+                _monitor.getPilotState(),
+                _monitor.getPilot(),
+                _monitor.getSessionEnergy(),
+                _monitor.getSessionElapsed(),
+                _monitor.getTemperature(EVSE_MONITOR_TEMP_MONITOR),
+                _monitor.getTemperature(EVSE_MONITOR_TEMP_MAX),
+                divert.isActive(),
+                shaper.getState(),
+                "", id);
 }
 
 bool EvseManager::serializeClaims(JsonDocument &doc)
