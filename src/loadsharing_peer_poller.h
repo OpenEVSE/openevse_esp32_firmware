@@ -226,7 +226,7 @@ private:
    * A peer added by hostname (e.g. "localhost:8001") starts with no device id.
    * /config exposes both the identity (wifi_serial == ESPAL.getLongId(),
    * hostname) and the EVSE's normal current limits (min_current_hard,
-   * max_current_soft). This GETs /config and records id/name plus min/max on
+   * default_current, or max_current_soft from older peers). This GETs /config and records id/name plus min/max on
    * the group peer, letting discovery reconcile the member by id and giving the
    * allocation algorithm the peer's real limits. Re-fetched whenever the peer's
    * config_version changes (see configVersionFetched), so limits never go stale.
