@@ -24,7 +24,7 @@
 #endif
 
 #ifndef SHELLY_LNM_APPLY_INTERVAL
-#define SHELLY_LNM_APPLY_INTERVAL 5000 // ms, minimum time between applying values
+#define SHELLY_LNM_APPLY_INTERVAL 5000 // ms, minimum time between status events, voltage and shaper updates
 #endif
 
 #ifndef SHELLY_LNM_VOLTAGE_STEP
@@ -52,14 +52,14 @@ class ShellyLnmTask : public MicroTasks::Task
     uint32_t _lastUpdate;
     // packet buffer, allocated only while listening
     uint8_t *_buffer;
-    // values received but not yet applied to divert / shaper / EVSE
+    // values received but not yet published / applied to the shaper and EVSE voltage
     bool _pendingPower;
     bool _pendingVoltage;
     uint32_t _lastApply;
     double _appliedVoltage;
 
     bool isConfigChanged();
-    void processPacket(const uint8_t *data, size_t len);
+    bool processPacket(const uint8_t *data, size_t len);
     void applyPending();
 
   protected:
