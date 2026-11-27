@@ -10,7 +10,14 @@ hardware is present.
 
 - **[Network](screenshots/settings-network-dark-desktop.png)** — WiFi
   scan/join, access-point fallback, hostname, wired Ethernet on supported
-  boards. See [Getting started](getting-started.md).
+  boards. See [Getting started](getting-started.md). While the charger has no
+  WiFi network and is running its own setup hotspot, an idle charger prompts
+  for setup: the TFT shows a QR code for joining the hotspot and the status
+  LEDs blink. Plugging in a vehicle, or a fault, brings back the normal
+  charging or fault screen and LED colours, and the prompt returns when the
+  vehicle is unplugged. For a charger that will never have WiFi, the **Setup
+  prompt** switch in the access-point section (`wifi_setup_prompt`, on by
+  default) turns both off; the hotspot itself stays available.
 - **[HTTP](screenshots/settings-http-dark-desktop.png)** — web access:
   admin username/password (strongly recommended — HTTP auth then protects
   every request including the input APIs), TLS certificate selection, UI

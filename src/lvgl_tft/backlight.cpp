@@ -25,3 +25,8 @@ bool bl_leds_dark(bool standby, bool leds_off_in_standby)
 {
   return standby && leds_off_in_standby;
 }
+
+bool bl_show_setup_screen(bool ap_mode, bool qr_enabled, bool vehicle, bool fault)
+{
+  return ap_mode && qr_enabled && !vehicle && !fault;
+}
