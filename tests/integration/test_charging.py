@@ -402,15 +402,36 @@ class TestConfig:
         assert response.status_code == 200
         data = response.json()
 
-        expected_fields = ["max_current_soft", "divert_type"]
+        expected_fields = ["default_current", "max_current_soft", "divert_type"]
         for field in expected_fields:
             assert field in data, (
                 f"Field '{field}' missing from /config. Got: {list(data.keys())}"
             )
 
-    def test_post_config_updates_max_current(self, evse_instance):
-        """Test: POST /config with max_current_soft persists the new value."""
+    def test_post_config_updates_default_current(self, evse_instance):
+        """Test: POST /config with default_current persists the new value."""
         new_limit = 24
+
+        response = api_post(
+            f"{evse_instance['native_url']}/config",
+            json={"default_current": new_limit},
+        )
+        assert response.status_code == 200, (
+            f"Expected 200, got {response.status_code}: {response.text}"
+        )
+
+        # Read back and verify; the deprecated alias reports the same value
+        config = api_get(f"{evse_instance['native_url']}/config").json()
+        assert config.get("default_current") == new_limit, (
+            f"Expected default_current={new_limit}, got {config.get('default_current')}"
+        )
+        assert config.get("max_current_soft") == new_limit, (
+            f"Expected max_current_soft={new_limit}, got {config.get('max_current_soft')}"
+        )
+
+    def test_post_config_accepts_deprecated_max_current_soft(self, evse_instance):
+        """Test: POST /config still accepts the old name, max_current_soft."""
+        new_limit = 20
 
         response = api_post(
             f"{evse_instance['native_url']}/config",
@@ -420,10 +441,9 @@ class TestConfig:
             f"Expected 200, got {response.status_code}: {response.text}"
         )
 
-        # Read back and verify
         config = api_get(f"{evse_instance['native_url']}/config").json()
-        assert config.get("max_current_soft") == new_limit, (
-            f"Expected max_current_soft={new_limit}, got {config.get('max_current_soft')}"
+        assert config.get("default_current") == new_limit, (
+            f"Expected default_current={new_limit}, got {config.get('default_current')}"
         )
 
 

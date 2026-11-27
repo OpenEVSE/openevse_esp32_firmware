@@ -205,13 +205,13 @@ Content-Type: application/json
 
 ###
 
-# Set the soft current limit
+# Set the default (boot) current
 
 POST {{baseUrl}}/config HTTP/1.1
 Content-Type: application/json
 
 {
-  "max_current_soft": 16
+  "default_current": 16
 }
 
 ###

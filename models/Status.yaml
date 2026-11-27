@@ -62,7 +62,7 @@ properties:
     description: 'the pilot value, in amps'
   max_current:
     type: integer
-    description: 'the actual max current value defined either by max_current_soft or a running claim'
+    description: 'the actual max current value defined either by default_current or a running claim'
   temp:
     oneOf:
       - type: number

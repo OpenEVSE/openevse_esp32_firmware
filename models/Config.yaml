@@ -17,6 +17,7 @@ x-examples:
     service: 0
     scale: 220
     offset: 0
+    default_current: 32
     max_current_soft: 32
     min_current_hard: 6
     max_current_hard: 32
@@ -156,8 +157,18 @@ properties:
     type: integer
   offset:
     type: integer
+  default_current:
+    type: integer
+    description: >-
+      Current the station starts at after a reboot, in amps. Saved to the
+      controller's EEPROM with `$SC amps`. It is a default, not a limit:
+      overrides and schedules may go above it, up to `max_current_hard`.
   max_current_soft:
     type: integer
+    deprecated: true
+    description: >-
+      Deprecated alias of `default_current`, still reported and accepted.
+      If a request carries both, `default_current` is used.
   min_current_hard:
     type: integer
     readOnly: true

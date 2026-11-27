@@ -99,19 +99,22 @@ bool EvseProperties::serialize(JsonObject &obj)
 EvseManager::Claim::Claim() :
   _client(EvseClient_NULL),
   _priority(0),
-  _properties()
+  _properties(),
+  _aboveDefault(false)
 {
 }
 
-bool EvseManager::Claim::claim(EvseClient client, int priority, EvseProperties &target)
+bool EvseManager::Claim::claim(EvseClient client, int priority, EvseProperties &target, bool aboveDefault)
 {
   if(_client != client ||
      _priority != priority ||
-     _properties != target)
+     _properties != target ||
+     _aboveDefault != aboveDefault)
   {
     _client = client;
     _priority = priority;
     _properties = target;
+    _aboveDefault = aboveDefault;
     return true;
   }
 
@@ -136,6 +139,7 @@ EvseManager::EvseManager(Stream &port, EventLog &eventLog) :
   _settingsChangedListener(this),
   _targetProperties(EvseState::Active),
   _hasClaims(false),
+  _charge_current_above_default(false),
   _evaluateClaims(true),
   _evaluateTargetState(false),
   _evseConnectRetryMs(EVSE_CONNECT_RETRY_MIN_MS),
@@ -190,6 +194,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
   _state_client = EvseClient_NULL;
   _charge_current_client = EvseClient_NULL;
   _max_current_client = EvseClient_NULL;
+  _charge_current_above_default = false;
 
   for(size_t i = 0; i < EVSE_MANAGER_MAX_CLIENT_CLAIMS; i++)
   {
@@ -219,6 +224,7 @@ bool EvseManager::evaluateClaims(EvseProperties &properties)
         properties.setChargeCurrent(claim.getChargeCurrent());
         chargeCurrentPriority = claim.getPriority();
         _charge_current_client = claim.getClient();
+        _charge_current_above_default = claim.allowsAboveDefault();
       }
 
       if(claim.getPriority() > maxCurrentPriority &&
@@ -277,17 +283,27 @@ bool EvseManager::setTargetState(EvseProperties &target)
     changeMade = true;
   }
 
-  // Work out what the max current should be
+  // Work out the charge current. The configured (soft) current is the
+  // default and caps every claim, except one marked aboveDefault (a manual
+  // override, a scheduled rule's own current): that may go up to the
+  // hardware max, as a volatile pilot that leaves the saved default alone.
   uint32_t charge_current = _monitor.getMaxConfiguredCurrent();
   DBUGVAR(charge_current);
-  if(UINT32_MAX != target.getMaxCurrent() && target.getMaxCurrent() < charge_current) {
-    charge_current = target.getMaxCurrent();
+  if(UINT32_MAX != target.getChargeCurrent())
+  {
+    uint32_t requested = target.getChargeCurrent();
+    if(requested < charge_current) {
+      charge_current = requested;
+    } else if(_charge_current_above_default) {
+      uint32_t hardware_max = _monitor.getMaxHardwareCurrent();
+      charge_current = (hardware_max > 0 && requested > hardware_max) ? hardware_max : requested;
+    }
   }
   DBUGVAR(charge_current);
 
-  // Work out the charge current
-  if(UINT32_MAX != target.getChargeCurrent() && target.getChargeCurrent() < charge_current) {
-    charge_current = target.getChargeCurrent();
+  // Then the max current (shaper, load sharing, limits) caps it
+  if(UINT32_MAX != target.getMaxCurrent() && target.getMaxCurrent() < charge_current) {
+    charge_current = target.getMaxCurrent();
   }
   DBUGVAR(charge_current);
 
@@ -471,7 +487,7 @@ bool EvseManager::begin()
   return true;
 }
 
-bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
+bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target, bool aboveDefault)
 {
   Claim *slot = NULL;
 
@@ -491,7 +507,7 @@ bool EvseManager::claim(EvseClient client, int priority, EvseProperties &target)
   if(slot)
   {
     DBUGF("Found slot");
-    if(slot->claim(client, priority, target))
+    if(slot->claim(client, priority, target, aboveDefault))
     {
       DBUGF("Claim added/updated, waking task");
       _evaluateClaims = true;

@@ -181,11 +181,12 @@ class EvseManager : public MicroTasks::Task
         EvseClient _client;
         int _priority;
         EvseProperties _properties;
+        bool _aboveDefault;
 
       public:
         Claim();
 
-        bool claim(EvseClient client, int priority, EvseProperties &target);
+        bool claim(EvseClient client, int priority, EvseProperties &target, bool aboveDefault = false);
         void release();
 
         bool isValid() {
@@ -214,6 +215,13 @@ class EvseManager : public MicroTasks::Task
 
         uint32_t getMaxCurrent() {
           return _properties.getMaxCurrent();
+        }
+
+        // True when this claim's charge current is an explicit user choice
+        // (manual override, a scheduled rule's current) that may exceed the
+        // configured default current, up to the hardware max.
+        bool allowsAboveDefault() {
+          return _aboveDefault;
         }
 
         bool isAutoRelease() {
@@ -248,6 +256,7 @@ class EvseManager : public MicroTasks::Task
     EvseClient _state_client;
     EvseClient _charge_current_client;
     EvseClient _max_current_client;
+    bool _charge_current_above_default;
 
     bool _evaluateClaims;
     bool _evaluateTargetState;
@@ -290,7 +299,10 @@ class EvseManager : public MicroTasks::Task
 
     bool begin();
 
-    bool claim(EvseClient client, int priority, EvseProperties &target);
+    // aboveDefault: the claim's charge current is an explicit user choice and
+    // may exceed the configured (default) current, up to the hardware max.
+    // Every other claim is capped at the default.
+    bool claim(EvseClient client, int priority, EvseProperties &target, bool aboveDefault = false);
     bool release(EvseClient client);
     bool clientHasClaim(EvseClient client);
     uint8_t getClaimsVersion();

@@ -2402,9 +2402,12 @@ static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
   server.on("/cabletemp", handleCableTemp);
 #endif // ENABLE_CABLE_TEMP
 
-  server.on("/schedule/plan", handleSchedulePlan);
+  // ArduinoMongoose matches the most recently registered route first, so a
+  // specific sub-path must be registered AFTER the wildcard that covers it,
+  // or the wildcard swallows it ("/schedule/plan" was answered as event "plan").
   server.on("/schedule", handleSchedule);
   server.on("/schedule/#", handleSchedule); // sub-path is the event id (exact match otherwise)
+  server.on("/schedule/plan", handleSchedulePlan);
 
   server.on("/claims/#", handleEvseClaims);
   server.on("/claims/target", handleEvseClaimsTarget);
@@ -2412,9 +2415,9 @@ static void registerWebServerRoutes(MongooseHttpServer &server, bool isHttps)
 
   server.on("/override", handleOverride);
 
-  server.on("/logs/export", handleLogsExport);
   server.on("/logs", handleEventLogs);
   server.on("/logs/#", handleEventLogs); // sub-path is the page (exact match otherwise)
+  server.on("/logs/export", handleLogsExport); // after "/logs/#" -- see "/schedule/plan"
   server.on("/certificates/#", handleCertificates);
   server.on("/certificates", handleCertificates);
   server.on("/limit", handleLimit);

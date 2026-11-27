@@ -104,5 +104,5 @@ Then('the charger has recorded {int} GFCI trip', async ({ world }, count: number
 });
 
 Then("the charger's maximum current is {int} A", async ({ world }, amps: number) => {
-  await waitFor('max current', async () => (await world.device.config()).max_current_soft === amps);
+  await waitFor('max current', async () => (await world.device.config()).default_current === amps);
 });

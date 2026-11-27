@@ -209,8 +209,6 @@ uint8_t led_brightness;
 // RFID storage
 String rfid_storage;
 
-long max_current_soft;
-
 // Scheduler settings
 uint32_t scheduler_start_window;
 
@@ -1148,13 +1146,21 @@ bool config_deserialize(JsonDocument &doc)
     }
   }
 
-  if(!doc["max_current_soft"].isNull())
+  // Default (boot) current, saved to the controller's EEPROM with `$SC amps`.
+  // It is the current the station starts at, not a limit: the ceiling is
+  // max_current_hard. `max_current_soft` is the deprecated name, still
+  // accepted; `default_current` wins if a request carries both.
+  JsonVariantConst defaultCurrent = doc["default_current"];
+  if(defaultCurrent.isNull()) {
+    defaultCurrent = doc["max_current_soft"];
+  }
+  if(!defaultCurrent.isNull())
   {
-    long current = doc["max_current_soft"];
+    long current = defaultCurrent.as<long>();
     if(current != evse.getMaxConfiguredCurrent()) {
       evse.setMaxConfiguredCurrent(current);
       config_modified = true;
-      DBUGLN("max_current_soft changed");
+      DBUGLN("default_current changed");
     }
   }
 
@@ -1362,6 +1368,9 @@ bool config_serialize(JsonDocument &doc, bool longNames, bool compactOutput, boo
     doc["heartbeat_interval"] = evse.getHeartbeatInterval();
     doc["heartbeat_current"] = evse.getHeartbeatCurrent();
     doc["voltage"] = voltage_cfg;
+    doc["default_current"] = evse.getMaxConfiguredCurrent();
+    // Deprecated alias of default_current, kept for existing clients (Home
+    // Assistant, older GUIs, load-sharing peers on older firmware).
     doc["max_current_soft"] = evse.getMaxConfiguredCurrent();
     // OpenEVSE Read only information
     doc["service"] = static_cast<uint8_t>(evse.getServiceLevel());

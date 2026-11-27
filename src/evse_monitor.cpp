@@ -706,9 +706,13 @@ void EvseMonitor::restart(std::function<void(int ret)> callback)
 
 void EvseMonitor::setPilot(long amps, bool force, std::function<void(int ret)> callback)
 {
-  // limit `amps` to the software limit
-  if(amps > _max_configured_current) {
-    amps = _max_configured_current;
+  // Limit `amps` to the hardware limit. The configured (soft) current is the
+  // boot default, and EvseManager already caps every claim at it unless the
+  // claim is an explicit override. Controllers before D9.4.2 still cap a
+  // volatile $SC at their saved value; the echoed pilot is adopted below.
+  long ceiling = _max_hardware_current > 0 ? _max_hardware_current : _max_configured_current;
+  if(amps > ceiling) {
+    amps = ceiling;
   }
   if(amps < _min_current) {
     amps = _min_current;

@@ -972,8 +972,10 @@ void LoadSharingPeerPoller::sendPeerConfigFetch(const String& host, const String
     }
 
     // /config is large; filter to just the identity and current-limit fields
-    // to bound memory. min_current_hard / max_current_soft are the peer's
+    // to bound memory. min_current_hard / default_current are the peer's
     // normal EVSE limits (== evse.getMinCurrent()/getMaxConfiguredCurrent()).
+    // Peers on older firmware report default_current only under its old
+    // name, max_current_soft, so both are read.
     MongooseString bodyStr = response->body();
     String body = bodyStr.toString();
 
@@ -981,6 +983,7 @@ void LoadSharingPeerPoller::sendPeerConfigFetch(const String& host, const String
     filter["wifi_serial"] = true;
     filter["hostname"] = true;
     filter["min_current_hard"] = true;
+    filter["default_current"] = true;
     filter["max_current_soft"] = true;
     filter["config_version"] = true;
 
@@ -1020,7 +1023,9 @@ void LoadSharingPeerPoller::sendPeerConfigFetch(const String& host, const String
     if (!doc["min_current_hard"].isNull()) {
       peer->setMinCurrent(doc["min_current_hard"].as<double>());
     }
-    if (!doc["max_current_soft"].isNull()) {
+    if (!doc["default_current"].isNull()) {
+      peer->setMaxCurrent(doc["default_current"].as<double>());
+    } else if (!doc["max_current_soft"].isNull()) {
       peer->setMaxCurrent(doc["max_current_soft"].as<double>());
     }
 
