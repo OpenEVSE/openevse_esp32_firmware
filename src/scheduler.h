@@ -280,10 +280,14 @@ class Scheduler : public MicroTasks::Task
     SchedulerFeature _activeFeature;
     SchedulerLimitType _activeLimitType;
 
-    // Next scheduled reboot (epoch seconds, 0 = none) and the event it came
-    // from, for logging.
+    // Next scheduled reboot (epoch seconds, 0 = none), used only to choose the
+    // task's wake delay. Whether a reboot is due is decided from the events
+    // themselves, never from this cache, so a deleted or edited rule can't fire.
     time_t _nextRebootAt;
-    uint32_t _nextRebootId;
+    // Reboot occurrences at or before this time have been dealt with (fired,
+    // skipped or reported missed). 0 = none yet. Moved to "now" on every
+    // schedule change, so editing a rule never fires it retroactively.
+    time_t _rebootCheckedUntil;
 
     void buildSchedule();
     void computeNextReboot(time_t now);
