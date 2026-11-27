@@ -104,6 +104,7 @@ String tft_theme;
 uint32_t tft_brightness;
 uint32_t tft_standby_brightness;
 bool tft_standby_leds_off;
+bool wifi_setup_prompt = true;  // non-TFT builds have no option; keep the hotspot blink
 
 // LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
 // char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
@@ -382,6 +383,7 @@ ConfigOpt *opts[] =
   new ConfigOptDefinition<uint32_t>(tft_brightness, 100, "tft_brightness", "tb"),
   new ConfigOptDefinition<uint32_t>(tft_standby_brightness, 15, "tft_standby_brightness", "tsb"),
   new ConfigOptDefinition<bool>(tft_standby_leds_off, false, "tft_standby_leds_off", "tslo"),
+  new ConfigOptDefinition<bool>(wifi_setup_prompt, true, "wifi_setup_prompt", "wspr"),
 #endif
 
 // LCD backlight timeout
@@ -760,11 +762,16 @@ void config_changed(String name)
     timeManager.setDhcpEnabled(config_sntp_dhcp());
   } else if(name == "sntp_hostname") {
     timeManager.setHost(sntp_hostname.c_str());
-  } else if(name == "lcd_backlight_timeout" || name == "tft_standby_leds_off") {
+  } else if(name == "lcd_backlight_timeout" || name == "tft_standby_leds_off" ||
+            name == "wifi_setup_prompt") {
     // The display task sleeps until its next scheduled update; nudge it so a
     // new timeout (or "never"), or the LEDs-in-standby switch, applies now
-    // rather than at the next state change
+    // rather than at the next state change (likewise the setup-prompt switch,
+    // which also decides the LED pattern)
     MicroTask.wakeTask(&lcd);
+    if(name == "wifi_setup_prompt") {
+      ledManager.refresh();
+    }
   }
 #endif
 }

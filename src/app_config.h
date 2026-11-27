@@ -55,6 +55,7 @@ extern String tft_theme;
 extern uint32_t tft_brightness;
 extern uint32_t tft_standby_brightness;
 extern bool tft_standby_leds_off;
+extern bool wifi_setup_prompt;
 
 // LCD backlight timeout (in seconds, 0 = never timeout). Shared key with the
 // char-LCD / TFT_eSPI energy-saving timeout (upstream PR #1039).
