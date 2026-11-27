@@ -6,6 +6,7 @@
 #include "time_man.h"
 #include "event.h"
 #include "web_server.h"
+#include "http_update.h"
 
 #include "LedManagerTask.h"
 
@@ -686,6 +687,18 @@ void NetManagerTask::updateMdns()
   if (!isConnected() && !isWifiModeAp()) {
     Mdns.end();
     _mdnsConfig = "";
+    return;
+  }
+
+  // An online firmware update needs the heap that rebuilding the services
+  // allocates (see http_update.cpp). A failed allocation in the rebuild aborts
+  // loopTask: std::string throws, and with the heap that low the exception
+  // object cannot be allocated either. The rebuild runs mid-download when the
+  // mDNS listener is closed (e.g. Mongoose drops it with "OOM" when it cannot
+  // buffer an incoming packet) or the station reconnects. Leave mDNS as it is
+  // until the update ends. A success reboots. After a failure, the next pass
+  // finds the listener inactive or the signature stale and rebuilds.
+  if (http_update_in_progress()) {
     return;
   }
 

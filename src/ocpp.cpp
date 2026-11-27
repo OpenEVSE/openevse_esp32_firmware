@@ -748,7 +748,7 @@ void OcppTask::initializeFwService() {
             updateFailure = false;
             updateSuccess = false;
 
-            return http_update_from_url(String(location.c_str()), [] (size_t complete, size_t total) { },
+            bool started = http_update_from_url(String(location.c_str()), [] (size_t complete, size_t total) { },
                 [this] (int status_code) {
                     //onSuccess
                     updateSuccess = true;
@@ -758,6 +758,15 @@ void OcppTask::initializeFwService() {
                     //onFailure
                     updateFailure = true;
                 });
+
+            // FirmwareService ignores this return value and reads the outcome
+            // from the status input above. A refused start (another online
+            // update is already running) calls no callback, so record it here
+            // or the installation would stay "Installing" for good.
+            if (!started) {
+                updateFailure = true;
+            }
+            return started;
         });
     }
 }
